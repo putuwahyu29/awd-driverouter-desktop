@@ -22,6 +22,10 @@ export function AddWebDAVAccount(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['AddWebDAVAccount'](arg1, arg2, arg3, arg4);
 }
 
+export function CheckForUpdates() {
+  return window['go']['main']['App']['CheckForUpdates']();
+}
+
 export function CompressFilesToZip(arg1, arg2, arg3) {
   return window['go']['main']['App']['CompressFilesToZip'](arg1, arg2, arg3);
 }
@@ -64,6 +68,10 @@ export function FindDuplicateFiles() {
 
 export function GetAccounts() {
   return window['go']['main']['App']['GetAccounts']();
+}
+
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
 }
 
 export function GetBackupInterval() {
@@ -116,6 +124,10 @@ export function GetWSAuthToken() {
 
 export function OpenFileInBrowser(arg1) {
   return window['go']['main']['App']['OpenFileInBrowser'](arg1);
+}
+
+export function OpenReleaseURL(arg1) {
+  return window['go']['main']['App']['OpenReleaseURL'](arg1);
 }
 
 export function PermanentlyDeleteFile(arg1) {

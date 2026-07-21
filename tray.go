@@ -40,8 +40,10 @@ const (
 	MF_STRING       = 0x00000000
 	MF_SEPARATOR    = 0x00000800
 
-	ID_TRAY_OPEN = 1001
-	ID_TRAY_QUIT = 1002
+	ID_TRAY_OPEN         = 1001
+	ID_TRAY_QUIT         = 1002
+	ID_TRAY_ABOUT        = 1003
+	ID_TRAY_CHECK_UPDATE = 1004
 )
 
 var (
@@ -165,6 +167,13 @@ func (a *App) runTrayLoop() {
 			switch id {
 			case ID_TRAY_OPEN:
 				a.ShowWindow()
+			case ID_TRAY_ABOUT:
+				a.ShowWindow()
+				runtime.EventsEmit(a.ctx, "menu:navigate", "about")
+			case ID_TRAY_CHECK_UPDATE:
+				a.ShowWindow()
+				runtime.EventsEmit(a.ctx, "menu:navigate", "about")
+				runtime.EventsEmit(a.ctx, "menu:check-updates")
 			case ID_TRAY_QUIT:
 				shellNotifyIcon(NIM_DELETE, &trayNID)
 				procPostQuitMessage.Call(0)
@@ -235,17 +244,25 @@ func (a *App) showTrayMenu(hwnd windows.HWND) {
 	lang, _ := a.database.GetSetting("language")
 	
 	openText := "Open Awd DriveRouter"
+	aboutText := "About & Updates"
+	checkText := "Check for Updates"
 	quitText := "Exit"
 	if lang == "id" {
 		openText = "Buka Awd DriveRouter"
+		aboutText = "Tentang & Pembaruan"
+		checkText = "Periksa Pembaruan"
 		quitText = "Keluar"
 	}
 
 	openStr, _ := syscall.UTF16PtrFromString(openText)
+	aboutStr, _ := syscall.UTF16PtrFromString(aboutText)
+	checkStr, _ := syscall.UTF16PtrFromString(checkText)
 	quitStr, _ := syscall.UTF16PtrFromString(quitText)
 	sepPtr, _ := syscall.UTF16PtrFromString("")
 
 	procAppendMenuW.Call(hMenu, MF_STRING, ID_TRAY_OPEN, uintptr(unsafe.Pointer(openStr)))
+	procAppendMenuW.Call(hMenu, MF_STRING, ID_TRAY_ABOUT, uintptr(unsafe.Pointer(aboutStr)))
+	procAppendMenuW.Call(hMenu, MF_STRING, ID_TRAY_CHECK_UPDATE, uintptr(unsafe.Pointer(checkStr)))
 	procAppendMenuW.Call(hMenu, MF_SEPARATOR, 0, uintptr(unsafe.Pointer(sepPtr)))
 	procAppendMenuW.Call(hMenu, MF_STRING, ID_TRAY_QUIT, uintptr(unsafe.Pointer(quitStr)))
 
@@ -269,3 +286,4 @@ func (a *App) QuitApp() {
 	a.quitting = true
 	runtime.Quit(a.ctx)
 }
+

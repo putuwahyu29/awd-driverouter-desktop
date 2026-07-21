@@ -75,10 +75,14 @@ import {
   FolderIconWithShared,
   FileIcon
 } from './components/Icons';
+import AboutView from './components/AboutView';
 import { PROVIDER_GUIDES } from './providerGuides';
 
+// @ts-ignore
+import { CheckForUpdates, OpenReleaseURL } from '../wailsjs/go/main/App';
+
 function App() {
-  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash'>('home');
+  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash' | 'about'>('home');
   const [storageTab, setStorageTab] = useState<'overview' | 'allocation' | 'duplicates'>('overview');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -187,6 +191,16 @@ function App() {
   // Duplicates finder state
   const [duplicateFiles, setDuplicateFiles] = useState<FileRecord[]>([]);
   const [duplicatesLoading, setDuplicatesLoading] = useState<boolean>(false);
+
+  // Auto Update check state
+  const [appVersion, setAppVersion] = useState<string>('1.0.0');
+  const [updateInfo, setUpdateInfo] = useState<{
+    has_update: boolean;
+    latest_version: string;
+    update_url: string;
+    release_notes: string;
+  } | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
 
   // Modals state
   const [modal, setModal] = useState<{ type: 'create-folder' | 'add-account' | 'credentials' | 'webdav' | 's3' | 'telegram' | 'telegram_user' | 'transfer-file' | 'remote-upload' | 'compress-zip' | 'share' | 'backup-task' | null; provider?: string } | null>(null);
@@ -420,10 +434,41 @@ function App() {
       });
     });
 
+    const offMenuNav = EventsOn('menu:navigate', (page: string) => {
+      if (page === 'about') {
+        setView('about');
+      }
+    });
+
+    // Get dynamic app version
+    // @ts-ignore
+    window.go?.main?.App?.GetAppVersion?.()?.then((ver: string) => {
+      if (ver) setAppVersion(ver);
+    });
+
+    const checkUpdates = () => {
+      CheckForUpdates()
+        .then((info: any) => {
+          if (info && info.has_update) {
+            setUpdateInfo(info);
+            setShowUpdateModal(true);
+          }
+        })
+        .catch((e: any) => console.error('Failed to check for updates:', e));
+    };
+
+    const offCheckUpdates = EventsOn('menu:check-updates', () => {
+      checkUpdates();
+    });
+
+    // Check for updates on startup and every 2 hours
+    checkUpdates();
+    const updateInterval = setInterval(checkUpdates, 2 * 60 * 60 * 1000);
+
     const uploadSocket = new WebSocket('ws://127.0.0.1:5999/ws/uploads');
     uploadSocket.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data) as { type?: string; id?: string; filename?: string; percent?: number; error?: string };
+        const message = JSON.parse(event.data) as { type?: string; id?: string; filename?: string; percent?: number; error?: string; size?: number; transferType?: string };
         
         if (message.type === 'upload_progress') {
           setTransfers(prev => prev.map(t => (
@@ -435,12 +480,6 @@ function App() {
           setTransfers(prev => prev.map(t => (
             t.id === message.id
               ? { ...t, status: message.error ? 'failed' : 'downloading', progress: message.percent ?? t.progress, error: message.error }
-              : t
-          )));
-        } else if (message.type === 'transfer_progress') {
-          setTransfers(prev => prev.map(t => (
-            t.id === message.id
-              ? { ...t, status: message.error ? 'failed' : 'transferring', progress: message.percent ?? t.progress, error: message.error }
               : t
           )));
         }
@@ -458,6 +497,7 @@ function App() {
     });
 
     return () => {
+      clearInterval(updateInterval);
       window.removeEventListener('click', closeMenu);
       window.removeEventListener('contextmenu', preventDefaultMenu);
       window.removeEventListener('mousedown', handleOutsideClick);
@@ -468,6 +508,8 @@ function App() {
       if (offDownloadDone) offDownloadDone();
       if (offDownloadFail) offDownloadFail();
       if (offExitPrompt) offExitPrompt();
+      if (offMenuNav) offMenuNav();
+      if (offCheckUpdates) offCheckUpdates();
       if (offFileDrop) offFileDrop();
       uploadSocket.close();
     };
@@ -1756,6 +1798,10 @@ function App() {
           <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')} title={sidebarCollapsed ? t('settings') : undefined}>
             <IconSettings />
             {!sidebarCollapsed && <span>{t('settings')}</span>}
+          </div>
+          <div className={`nav-item ${view === 'about' ? 'active' : ''}`} onClick={() => setView('about')} title={sidebarCollapsed ? t('about') : undefined}>
+            <IconInfo />
+            {!sidebarCollapsed && <span>{t('about')}</span>}
           </div>
         </nav>
 
@@ -3533,6 +3579,15 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* About App tab */}
+        {view === 'about' && (
+          <div className="explorer-body">
+            <div className="content-scroll" style={{ width: '100%', paddingBottom: '40px' }}>
+              <AboutView lang={lang} />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Floating Context Menu */}
@@ -4728,6 +4783,91 @@ function App() {
                 }}
               >
                 {actionDialog.type === 'info' ? (actionDialog.confirmLabel || 'OK') : (actionDialog.confirmLabel || (actionDialog.type === 'prompt' ? t('submit') : t('yes')))}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpdateModal && updateInfo && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 9999, animation: 'fadeIn 0.25s ease',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--md-sys-color-surface-container-high, #252b36)', width: '420px', padding: '28px',
+            borderRadius: '28px', textAlign: 'left', boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+            border: '1px solid var(--md-sys-color-outline-variant, #394252)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            display: 'flex', flexDirection: 'column', gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.2)',
+                borderRadius: '12px', padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-primary, #3b82f6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '500', color: 'var(--md-sys-color-on-surface, #fff)' }}>
+                {lang === 'id' ? 'Pembaruan Tersedia' : 'Update Available'}
+              </h3>
+            </div>
+
+            <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'var(--md-sys-color-on-surface-variant, #a0aec0)', margin: 0 }}>
+              {lang === 'id' 
+                ? `Versi baru (${updateInfo.latest_version}) telah dirilis. Versi Anda saat ini adalah ${appVersion}.`
+                : `A new version (${updateInfo.latest_version}) is available. Your current version is ${appVersion}.`}
+            </p>
+
+            {updateInfo.release_notes && (
+              <div style={{
+                backgroundColor: 'var(--md-sys-color-surface-container-low, #1e232d)',
+                borderRadius: '16px', padding: '12px 16px', fontSize: '13px',
+                color: 'var(--md-sys-color-on-surface-variant, #a0aec0)', maxHeight: '160px',
+                overflowY: 'auto', border: '1px solid var(--md-sys-color-outline-variant, #394252)',
+                whiteSpace: 'pre-wrap', lineHeight: '1.5'
+              }}>
+                <strong style={{ display: 'block', marginBottom: '6px', color: 'var(--md-sys-color-on-surface, #fff)' }}>
+                  {lang === 'id' ? 'Catatan Rilis:' : 'Release Notes:'}
+                </strong>
+                {updateInfo.release_notes}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+              <button
+                onClick={() => setShowUpdateModal(false)}
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--md-sys-color-primary, #3b82f6)',
+                  padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontWeight: 500,
+                  fontSize: '14px', transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                {lang === 'id' ? 'Nanti Saja' : 'Later'}
+              </button>
+              <button
+                onClick={() => {
+                  OpenReleaseURL(updateInfo.update_url);
+                  setShowUpdateModal(false);
+                }}
+                style={{
+                  background: 'var(--md-sys-color-primary, #3b82f6)', border: 'none', color: '#fff',
+                  padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontWeight: 500,
+                  fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'filter 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+              >
+                {lang === 'id' ? 'Perbarui Sekarang' : 'Update Now'}
               </button>
             </div>
           </div>

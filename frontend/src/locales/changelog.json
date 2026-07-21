@@ -1,0 +1,26 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-07-21",
+    "title": {
+      "id": "Awd DriveRouter v1.0.0 - Rilis Perdana & Fitur Pembaruan",
+      "en": "Awd DriveRouter v1.0.0 - Initial Release & Update Features"
+    },
+    "changes": {
+      "id": [
+        "Rilis perdana Awd DriveRouter.",
+        "Dukungan multi-cloud storage (Google Drive, OneDrive, Dropbox, Box, Yandex, pCloud, WebDAV, S3, Telegram).",
+        "Aturan alokasi pengunggahan cerdas (Round-Robin, Max Free Space, Mirroring).",
+        "Fitur Cek Otomatis Pembaruan dari GitHub Releases.",
+        "Halaman 'Tentang Aplikasi', Catatan Rilis (Changelog), dan integrasi System Tray Icon."
+      ],
+      "en": [
+        "Initial release of Awd DriveRouter.",
+        "Multi-cloud storage support (Google Drive, OneDrive, Dropbox, Box, Yandex, pCloud, WebDAV, S3, Telegram).",
+        "Smart upload allocation strategies (Round-Robin, Max Free Space, Mirroring).",
+        "Automatic GitHub Release update checker.",
+        "'About App' page, Release Notes (Changelog), and System Tray Icon integration."
+      ]
+    }
+  }
+]
