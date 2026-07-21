@@ -317,7 +317,7 @@ func (a *App) DeleteFile(virtualID string) error {
 
 	isTrashSupported := false
 	prov := f.Provider
-	if prov == "google" || prov == "onedrive" || prov == "dropbox" || prov == "box" || prov == "yandex" || prov == "pcloud" {
+	if prov == "google" || prov == "onedrive" || prov == "dropbox" || prov == "box" || prov == "yandex" || prov == "pcloud" || prov == "mega" {
 		isTrashSupported = true
 	}
 

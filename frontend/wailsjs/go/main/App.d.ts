@@ -4,9 +4,25 @@ import {db} from '../models';
 import {main} from '../models';
 import {provider} from '../models';
 
+export function AddB2Account(arg1:string,arg2:string,arg3:string,arg4:string):Promise<db.AccountRecord>;
+
+export function AddFTPAccount(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string):Promise<db.AccountRecord>;
+
 export function AddFilePermission(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function AddFourSharedAccount(arg1:string,arg2:string):Promise<db.AccountRecord>;
+
+export function AddKoofrAccount(arg1:string,arg2:string):Promise<db.AccountRecord>;
+
+export function AddMediaFireAccount(arg1:string,arg2:string):Promise<db.AccountRecord>;
+
+export function AddMegaAccount(arg1:string,arg2:string):Promise<db.AccountRecord>;
+
 export function AddS3Account(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<db.AccountRecord>;
+
+export function AddSFTPAccount(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string):Promise<db.AccountRecord>;
+
+export function AddSMBAccount(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<db.AccountRecord>;
 
 export function AddSyncTask(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

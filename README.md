@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Storage-SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite Badge">
 </p>
 
-**Awd DriveRouter Desktop** is a powerful, cross-platform desktop application that unifies multiple cloud storage providers into a single, intelligent file management interface. Built with **Wails (Go)** and **React/Vite (TypeScript)**, it acts as a smart routing layer — letting you upload, sync, browse, and share files across Google Drive, OneDrive, Dropbox, Box, Yandex Disk, pCloud, WebDAV, S3-compatible storage, and Telegram — all from one seamless desktop experience.
+**Awd DriveRouter Desktop** is a powerful, cross-platform desktop application that unifies multiple cloud storage providers into a single, intelligent file management interface. Built with **Wails (Go)** and **React/Vite (TypeScript)**, it acts as a smart routing layer — letting you upload, sync, browse, and share files across 17 storage options (Google Drive, OneDrive, Dropbox, Box, Yandex Disk, pCloud, MEGA, Koofr, MediaFire, 4Shared, Backblaze B2, SMB/LAN Share, FTP, SFTP, WebDAV, S3-compatible, and Telegram) — all from one seamless desktop experience.
 
 ---
 
@@ -88,7 +88,15 @@
 | **Dropbox** | OAuth 2.0 | Requires Dropbox app key & secret |
 | **Box** | OAuth 2.0 | Requires Box OAuth 2.0 app credentials |
 | **Yandex Disk** | OAuth 2.0 | Requires Yandex OAuth application credentials |
-| **pCloud** | Direct Login | Email & password — no OAuth app required |
+| **pCloud** | OAuth 2.0 | Requires pCloud OAuth app credentials |
+| **MEGA** | Direct Login | Email & password — E2EE support |
+| **Koofr** | Direct Login | Email & App Password — 10 GB free tier |
+| **MediaFire** | Direct Login | Email & password — 10 GB free tier |
+| **4Shared** | Direct Login | Email & password — 15 GB free tier |
+| **Backblaze B2** | Access Keys | Application Key ID & Key — 10 GB free tier |
+| **Windows Share (SMB)** | Direct Login | Host/IP, Share Name, Username, and Password — LAN Storage |
+| **FTP Server** | Direct Login | Host, Port (21), username, and password |
+| **SFTP (SSH)** | Direct Login | Host, Port (22), username, and password |
 | **WebDAV** | Direct Login | Server URL, username, and password or app token |
 | **S3-Compatible** | Access Keys | Endpoint, bucket, access key ID, and secret key |
 | **Telegram Bot** | Bot Token | Bot token + target chat/channel ID |

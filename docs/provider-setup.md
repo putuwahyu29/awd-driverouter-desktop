@@ -1,14 +1,16 @@
-# Provider setup guide
+# Provider credential setup
 
-This guide collects the connection steps for each cloud provider supported by Awd DriveRouter.
-Use this as the single reference when you need to set up a new account or troubleshoot a connection.
+This guide explains how to create credentials and connect cloud storage providers supported by Awd DriveRouter.
 
-## Where to configure credentials
+Keep this guide separate from the main `README.md` so the README stays short while provider-specific setup remains detailed.
 
-Most providers are configured from the app UI under Cloud Accounts or the provider-specific connection modal.
-OAuth-based providers also require a callback URL in the provider console:
+## Redirect URIs used by Awd DriveRouter
 
-`http://localhost:5998/oauth/callback`
+Use this callback URL when running Awd DriveRouter:
+
+| Provider | Redirect URI |
+| --- | --- |
+| Google Drive, OneDrive, Dropbox, Box, Yandex Disk, pCloud | `http://localhost:5998/oauth/callback` |
 
 If you change the app port in the future, update the redirect URI in both the provider console and the app settings.
 
@@ -21,15 +23,40 @@ If you change the app port in the future, update the redirect URI in both the pr
 | Dropbox | OAuth | Settings -> Dropbox Credentials | Uses Dropbox app key and secret |
 | Box | OAuth | Settings -> Box Credentials | Uses Box app credentials |
 | Yandex Disk | OAuth | Settings -> Yandex Disk Credentials | Uses Yandex OAuth app credentials |
-| pCloud | Direct login | Cloud Accounts -> Connect pCloud | Uses account email and password |
+| pCloud | OAuth | Settings -> pCloud Credentials | Uses pCloud OAuth app credentials |
+| MEGA | Direct login | Cloud Accounts -> Connect MEGA | Uses account email and password (+ 2FA if enabled) |
+| Koofr | Direct login | Cloud Accounts -> Connect Koofr | Uses account username/email and App Password |
+| MediaFire | Direct login | Cloud Accounts -> Connect MediaFire | Uses account email and password |
+| 4Shared | Direct login | Cloud Accounts -> Connect 4Shared | Uses account email and password |
+| Backblaze B2 | Access keys | Cloud Accounts -> Connect Backblaze B2 | Uses Application Key ID, Key, and Bucket Name |
+| Windows Share (SMB) | Direct login | Cloud Accounts -> Connect Windows Share (SMB) | Uses Host/IP, Share Name, Username, and Password |
+| FTP Server | Direct login | Cloud Accounts -> Connect FTP Server | Uses Host, Port (21), Username, Password, and Base Dir |
+| SFTP (SSH) | Direct login | Cloud Accounts -> Connect SFTP (SSH) | Uses Host, Port (22), Username, Password, and Base Dir |
 | WebDAV | Direct login | Cloud Accounts -> Connect WebDAV | Uses server URL, username, and password/token |
 | S3-compatible storage | Access keys | Cloud Accounts -> Connect S3 | Uses endpoint, bucket, access key, and secret key |
 | Telegram Bot | Bot token | Cloud Accounts -> Connect Telegram | Uses bot token and chat ID/channel ID |
 | Telegram User | MTProto login | Cloud Accounts -> Connect Telegram User | Uses phone number, API ID, API hash, and verification code |
 
+## What needs OAuth, and what does not
+
+Awd DriveRouter supports two connection styles:
+
+| Provider | OAuth app required? | What you prepare | Where you connect |
+| --- | --- | --- | --- |
+| Google Drive | Yes (OAuth client in Google Cloud) | Client ID + secret in Settings | Connect -> Google Drive (redirect login) |
+| OneDrive | Yes (Entra app registration) | Client ID + secret in Settings | Connect -> OneDrive (redirect login) |
+| Dropbox | Yes (Dropbox app) | App key + secret in Settings | Connect -> Dropbox (redirect login) |
+| Box | Yes (Box app) | Client ID + secret in Settings | Connect -> Box (redirect login) |
+| Yandex Disk | Yes (Yandex OAuth app) | Client ID + secret in Settings | Connect -> Yandex Disk (redirect login) |
+| pCloud | Yes (pCloud App Console) | Client ID + secret in Settings | Connect -> pCloud (redirect login) |
+| MEGA | No | Email + password (+ 2FA) | Connect -> MEGA (in-app form) |
+| WebDAV | No | Server URL + Username + Password | Connect -> WebDAV (in-app form) |
+| S3 (R2, B2, MinIO, Tebi, etc.) | No | Access Key + Secret + bucket + endpoint | Connect -> S3 (in-app form) |
+| Telegram (Bot & User) | No | Bot token or Phone + API ID/Hash | Connect -> Telegram (in-app form) |
+
 ## Google Drive
 
-1. Open Google Cloud Console.
+1. Open Google Cloud Console (`https://console.cloud.google.com/`).
 2. Create or select a project.
 3. Enable the Google Drive API.
 4. Create an OAuth client ID for a Web application.
@@ -47,170 +74,169 @@ If you change the app port in the future, update the redirect URI in both the pr
 
 ## OneDrive
 
-1. Open the Microsoft Entra app registration page.
+1. Open the Microsoft Entra app registration page (`https://entra.microsoft.com/`).
 2. Register a new application.
 3. Set the supported account type according to your tenant needs.
 4. Add this redirect URI:
 
    `http://localhost:5998/oauth/callback`
 
-5. Add Microsoft Graph delegated permissions for files and profile access.
+5. Add Microsoft Graph delegated permissions for files and profile access (`Files.ReadWrite.All`, `offline_access`, `User.Read`).
 6. Create a client secret.
 7. Save the client ID and secret in the app settings.
 8. Open Cloud Accounts and connect OneDrive.
 
-### Notes
-
-- If your tenant requires admin consent, grant it in the Entra portal.
-- If login fails, verify that the redirect URI exactly matches the URI configured in the app.
-
 ## Dropbox
 
-1. Open the Dropbox App Console.
-2. Create a new app.
-3. Choose the app permissions needed for file read and write.
-4. Add this redirect URI:
+1. Open Dropbox App Console (`https://www.dropbox.com/developers/apps`).
+2. Create an app with scoped access and full Dropbox or app folder permissions.
+3. Add this redirect URI:
 
    `http://localhost:5998/oauth/callback`
 
-5. Copy the app key and app secret.
-6. Save them in the Dropbox credentials section.
-7. Open Cloud Accounts and connect Dropbox.
-
-### Notes
-
-- Dropbox credentials are used only for the OAuth flow.
-- If the account does not connect, check the app permissions and redirect URI.
+4. Copy the App key and App secret into the Dropbox credentials section in Settings.
+5. Enable permissions: `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`.
+6. Open Cloud Accounts and connect Dropbox.
 
 ## Box
 
-1. Open the Box Developer Console.
-2. Create a custom app.
-3. Enable OAuth 2.0 user authentication.
-4. Add this redirect URI:
+1. Open the Box Developer Console (`https://app.box.com/developers/console`).
+2. Create a Custom App with OAuth 2.0 authentication.
+3. Add this redirect URI:
 
    `http://localhost:5998/oauth/callback`
 
-5. Make sure file read and write scopes are enabled.
-6. Copy the client ID and client secret into the Box credentials section.
-7. Open Cloud Accounts and connect Box.
-
-### Notes
-
-- Box often requires the exact redirect URI and matching scopes.
-- If the token exchange fails, re-check the app credential values.
+4. Save the Client ID and Client Secret in Settings.
+5. Open Cloud Accounts and connect Box.
 
 ## Yandex Disk
 
-1. Open the Yandex OAuth app console.
-2. Create a new application.
-3. Choose the Web services platform.
-4. Add this redirect URI:
+1. Open the Yandex OAuth app console (`https://oauth.yandex.com/client/new`).
+2. Create a new application (Web services platform).
+3. Add this redirect URI:
 
    `http://localhost:5998/oauth/callback`
 
-5. Enable the Yandex.Disk permissions for file access.
-6. Save the client ID and client secret in the Yandex Disk credentials section.
-7. Open Cloud Accounts and connect Yandex Disk.
+4. Enable Yandex.Disk permissions (`cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`).
+5. Save the client ID and client secret in Settings.
+6. Open Cloud Accounts and connect Yandex Disk.
 
-### Notes
-
-- Yandex uses OAuth like Google, OneDrive, Dropbox, and Box.
-- If the account does not appear after login, confirm the redirect URI and permissions.
-
-## pCloud
-
-pCloud does not require a developer OAuth app in this project.
+## MEGA
 
 1. Open Cloud Accounts.
-2. Choose Connect -> pCloud.
-3. Enter your pCloud email and password.
+2. Choose Connect -> MEGA.
+3. Enter your MEGA email and password.
 4. Submit the form.
 
 ### Notes
 
-- No client ID or client secret is required for pCloud.
-- If you use 2FA, you may need an app-specific password.
-- If the login is rejected, confirm the region and account password are correct.
+- No Client ID or Client Secret required.
+- Session credentials are stored encrypted in the local SQLite database.
+
+## Koofr
+
+1. Open Cloud Accounts.
+2. Choose Connect -> Koofr.
+3. Enter your Koofr Email/Username and App Password (generated from Koofr Settings -> Account -> Password -> Generate App Password).
+4. Submit the form.
+
+### Notes
+
+- Includes 10 GB free storage tier.
+- Connected via secure WebDAV protocol (`https://app.koofr.net/dav/Koofr`).
+
+## MediaFire
+
+1. Open Cloud Accounts.
+2. Choose Connect -> MediaFire.
+3. Enter your MediaFire Email and Password.
+4. Submit the form.
+
+### Notes
+
+- Includes 10 GB free storage tier.
+
+## 4Shared
+
+1. Open Cloud Accounts.
+2. Choose Connect -> 4Shared.
+3. Enter your 4Shared Email and Password.
+4. Submit the form.
+
+### Notes
+
+- Includes 15 GB free storage tier.
+
+## Backblaze B2 Native
+
+1. Open Cloud Accounts.
+2. Choose Connect -> Backblaze B2.
+3. Enter Key ID, Application Key, and Bucket Name.
+4. Submit the form.
+
+### Notes
+
+- Includes 10 GB free storage tier.
+
+## Windows Network Share (SMB / LAN)
+
+1. Open Cloud Accounts.
+2. Choose Connect -> Windows Share (SMB).
+3. Enter Server Host/IP (e.g. `192.168.1.100`), Share Name, Username, and Password.
+4. Submit the form.
+
+### Notes
+
+- Native NTLM authentication over SMB2 protocol (`github.com/hirochachacha/go-smb2`).
+
+## FTP Server
+
+1. Open Cloud Accounts.
+2. Choose Connect -> FTP Server.
+3. Enter Host/IP, Port (default 21), Username, Password, and Base Remote Directory (e.g. `/`).
+4. Submit the form.
+
+## SFTP (SSH) Server
+
+1. Open Cloud Accounts.
+2. Choose Connect -> SFTP (SSH).
+3. Enter Host/IP, Port (default 22), Username, Password, and Base Remote Directory (e.g. `/`).
+4. Submit the form.
+
+## pCloud
+
+1. Open the pCloud App Console (`https://docs.pcloud.com/my_apps/`).
+2. Click **Create new app**.
+3. Add this redirect URI:
+
+   `http://localhost:5998/oauth/callback`
+
+4. Copy the Client ID and Client Secret into the pCloud Credentials section in App Settings.
+5. Open Cloud Accounts and connect pCloud.
+
+### Notes
+
+- pCloud uses OAuth 2.0 authentication like Google, OneDrive, Dropbox, Box, and Yandex.
+- Ensure Client ID and Client Secret are saved in Settings before connecting.
 
 ## WebDAV
 
-WebDAV is connected directly from the app UI.
-
 1. Open Cloud Accounts.
 2. Choose Connect -> WebDAV.
-3. Enter the server URL.
-4. Enter the username.
-5. Enter the password or app token.
-6. Submit the form.
-
-### Notes
-
-- WebDAV does not use OAuth in this app.
-- Make sure the server URL includes the correct WebDAV path.
-- If the server uses a self-signed certificate, confirm your server trust settings first.
+3. Enter server URL, username, and password/token.
+4. Submit the form.
 
 ## S3-compatible storage
 
-S3-compatible providers all use the same connection form.
-
 1. Open Cloud Accounts.
 2. Choose Connect -> S3.
-3. Enter the endpoint URL.
-4. Enter the bucket name.
-5. Enter the access key ID.
-6. Enter the secret access key.
-7. Submit the form.
+3. Enter Access Key ID, Secret Access Key, Bucket Name, Endpoint, and Region.
+4. Submit the form.
 
-### Notes
-
-- No OAuth client is required.
-- The form works with any S3-compatible backend that exposes the S3 API.
-- If the connection fails, verify the endpoint, bucket, and credentials.
-
-## Telegram Bot
+## Telegram (Bot & User)
 
 1. Open Cloud Accounts.
-2. Choose Connect -> Telegram.
-3. Enter the bot token.
-4. Enter the chat ID or channel ID.
+2. Choose Connect -> Telegram (Bot) or Connect -> Telegram User.
+3. For Bot: enter Bot Token and Target Chat ID.
+4. For User: enter Phone Number, API ID, API Hash, and 2FA password (if enabled).
 5. Submit the form.
-
-### Notes
-
-- This is for bot-based storage access.
-- The bot must have access to the destination chat or channel.
-
-## Telegram User
-
-Telegram User uses the MTProto login flow.
-
-1. Open Cloud Accounts.
-2. Choose Connect -> Telegram User.
-3. Enter your phone number.
-4. Enter the Telegram API ID.
-5. Enter the Telegram API hash.
-6. Request and enter the verification code.
-7. If prompted, enter your 2-step verification password.
-
-### Notes
-
-- You must create the Telegram API ID and API hash at `my.telegram.org`.
-- This mode stores a session for later reuse.
-- Keep the session data and API credentials private.
-
-## Troubleshooting
-
-- If OAuth login opens but fails on callback, verify the redirect URI exactly matches `http://localhost:5998/oauth/callback`.
-- If a provider says credentials are missing, check the Settings page first.
-- If a direct-login provider fails, confirm the username, password, token, or endpoint manually.
-- If the provider does not appear in the app, make sure the app was rebuilt after editing the frontend or Go backend.
-
-## Suggested workflow
-
-1. Read the quick reference table.
-2. Open the matching provider section.
-3. Configure the provider console or app form.
-4. Save credentials.
-5. Connect the account from Cloud Accounts.
-6. Run sync and confirm the account appears in the file explorer.

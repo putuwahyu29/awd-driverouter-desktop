@@ -158,6 +158,42 @@ export const TRANSLATIONS: Record<'en' | 'id', Record<string, string>> = {
     confirmExitMessage: "Are you sure you want to exit Awd DriveRouter? Any active transfers might be interrupted.",
     confirmExitButton: "Exit Application",
     
+    // MEGA Keys
+    connectMega: "Connect MEGA Account",
+    megaEmailLabel: "MEGA Email",
+    megaPasswordLabel: "MEGA Password",
+
+    // Koofr & MediaFire Keys
+    connectKoofr: "Connect Koofr Account",
+    koofrUserLabel: "Koofr Email / Username",
+    koofrPassLabel: "Koofr App Password",
+    connectMediaFire: "Connect MediaFire Account",
+    mediafireEmailLabel: "MediaFire Email",
+    mediafirePasswordLabel: "MediaFire Password",
+
+    // 4Shared, B2, & SMB Keys
+    connectFourShared: "Connect 4Shared Account",
+    foursharedEmailLabel: "4Shared Email",
+    foursharedPasswordLabel: "4Shared Password",
+    connectB2: "Connect Backblaze B2 Native Storage",
+    b2KeyIDLabel: "B2 Application Key ID",
+    b2AppKeyLabel: "B2 Application Key",
+    b2BucketLabel: "B2 Bucket Name",
+    connectSmb: "Connect Windows Share (SMB/LAN)",
+    smbHostLabel: "Server Host / IP",
+    smbShareLabel: "Share Name",
+    smbUserLabel: "Username",
+    smbPassLabel: "Password",
+
+    // FTP / SFTP Keys
+    connectFtp: "Connect FTP Server",
+    connectSftp: "Connect SFTP Server (SSH)",
+    serverHostLabel: "Server Host / IP",
+    serverPortLabel: "Server Port",
+    serverUserLabel: "Username",
+    serverPassLabel: "Password",
+    serverBaseDirLabel: "Base Remote Folder",
+    
     // WebDAV / S3 / Telegram / Custom Keys
     displayNameLabel: "Account Name",
     webdavUrlLabel: "WebDAV Server URL",
@@ -392,6 +428,42 @@ export const TRANSLATIONS: Record<'en' | 'id', Record<string, string>> = {
     confirmExitTitle: "Konfirmasi Keluar",
     confirmExitMessage: "Apakah Anda yakin ingin keluar dari Awd DriveRouter? Transfer yang sedang aktif mungkin akan terhenti.",
     confirmExitButton: "Keluar Aplikasi",
+    
+    // MEGA Keys
+    connectMega: "Hubungkan Akun MEGA",
+    megaEmailLabel: "Email MEGA",
+    megaPasswordLabel: "Password MEGA",
+
+    // Koofr & MediaFire Keys
+    connectKoofr: "Hubungkan Akun Koofr",
+    koofrUserLabel: "Email / Username Koofr",
+    koofrPassLabel: "App Password Koofr",
+    connectMediaFire: "Hubungkan Akun MediaFire",
+    mediafireEmailLabel: "Email MediaFire",
+    mediafirePasswordLabel: "Password MediaFire",
+
+    // 4Shared, B2, & SMB Keys
+    connectFourShared: "Hubungkan Akun 4Shared",
+    foursharedEmailLabel: "Email 4Shared",
+    foursharedPasswordLabel: "Password 4Shared",
+    connectB2: "Hubungkan Backblaze B2 Native Storage",
+    b2KeyIDLabel: "B2 Application Key ID",
+    b2AppKeyLabel: "B2 Application Key",
+    b2BucketLabel: "Nama Bucket B2",
+    connectSmb: "Hubungkan Windows Share (SMB/LAN)",
+    smbHostLabel: "Host / IP Server",
+    smbShareLabel: "Nama Share Folder",
+    smbUserLabel: "Username",
+    smbPassLabel: "Password",
+
+    // FTP / SFTP Keys
+    connectFtp: "Hubungkan Server FTP",
+    connectSftp: "Hubungkan Server SFTP (SSH)",
+    serverHostLabel: "Host / IP Server",
+    serverPortLabel: "Port Server",
+    serverUserLabel: "Username",
+    serverPassLabel: "Password",
+    serverBaseDirLabel: "Folder Utama Remote",
     
     // WebDAV / S3 / Telegram / Custom Keys
     displayNameLabel: "Nama Akun",

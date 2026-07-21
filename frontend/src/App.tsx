@@ -71,6 +71,14 @@ import {
   IconBox,
   IconYandex,
   IconPCloud,
+  IconMega,
+  IconKoofr,
+  IconMediaFire,
+  Icon4Shared,
+  IconB2,
+  IconSmb,
+  IconFtp,
+  IconSftp,
   IconTelegram,
   FolderIconWithShared,
   FileIcon
@@ -204,13 +212,64 @@ function App() {
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
 
   // Modals state
-  const [modal, setModal] = useState<{ type: 'create-folder' | 'add-account' | 'credentials' | 'webdav' | 's3' | 'telegram' | 'telegram_user' | 'transfer-file' | 'remote-upload' | 'compress-zip' | 'share' | 'backup-task' | null; provider?: string } | null>(null);
+  const [modal, setModal] = useState<{ type: 'create-folder' | 'add-account' | 'credentials' | 'mega' | 'koofr' | 'mediafire' | 'fourshared' | 'b2' | 'smb' | 'ftp' | 'sftp' | 'webdav' | 's3' | 'telegram' | 'telegram_user' | 'transfer-file' | 'remote-upload' | 'compress-zip' | 'share' | 'backup-task' | null; provider?: string } | null>(null);
   const [actionDialog, setActionDialog] = useState<AppDialog | null>(null);
   const [dialogInput, setDialogInput] = useState<string>('');
   const [folderNameInput, setFolderNameInput] = useState<string>('');
   const [credClientID, setCredClientID] = useState<string>('');
   const [credClientSecret, setCredClientSecret] = useState<string>('');
   
+  // MEGA input states
+  const [megaEmail, setMegaEmail] = useState<string>('');
+  const [megaPassword, setMegaPassword] = useState<string>('');
+  const [megaLoading, setMegaLoading] = useState<boolean>(false);
+  const [megaError, setMegaError] = useState<string>('');
+
+  // 4Shared input states
+  const [foursharedEmail, setFoursharedEmail] = useState<string>('');
+  const [foursharedPassword, setFoursharedPassword] = useState<string>('');
+  const [foursharedLoading, setFoursharedLoading] = useState<boolean>(false);
+  const [foursharedError, setFoursharedError] = useState<string>('');
+
+  // Backblaze B2 input states
+  const [b2DisplayName, setB2DisplayName] = useState<string>('');
+  const [b2KeyID, setB2KeyID] = useState<string>('');
+  const [b2AppKey, setB2AppKey] = useState<string>('');
+  const [b2Bucket, setB2Bucket] = useState<string>('');
+  const [b2Loading, setB2Loading] = useState<boolean>(false);
+  const [b2Error, setB2Error] = useState<string>('');
+
+  // SMB input states
+  const [smbDisplayName, setSmbDisplayName] = useState<string>('');
+  const [smbHost, setSmbHost] = useState<string>('');
+  const [smbShare, setSmbShare] = useState<string>('');
+  const [smbUsername, setSmbUsername] = useState<string>('');
+  const [smbPassword, setSmbPassword] = useState<string>('');
+  const [smbLoading, setSmbLoading] = useState<boolean>(false);
+  const [smbError, setSmbError] = useState<string>('');
+
+  // Koofr input states
+  const [koofrUser, setKoofrUser] = useState<string>('');
+  const [koofrPass, setKoofrPass] = useState<string>('');
+  const [koofrLoading, setKoofrLoading] = useState<boolean>(false);
+  const [koofrError, setKoofrError] = useState<string>('');
+
+  // MediaFire input states
+  const [mediafireEmail, setMediafireEmail] = useState<string>('');
+  const [mediafirePassword, setMediafirePassword] = useState<string>('');
+  const [mediafireLoading, setMediafireLoading] = useState<boolean>(false);
+  const [mediafireError, setMediafireError] = useState<string>('');
+
+  // FTP / SFTP input states
+  const [serverDisplayName, setServerDisplayName] = useState<string>('');
+  const [serverHost, setServerHost] = useState<string>('');
+  const [serverPort, setServerPort] = useState<number>(21);
+  const [serverUsername, setServerUsername] = useState<string>('');
+  const [serverPassword, setServerPassword] = useState<string>('');
+  const [serverBaseDir, setServerBaseDir] = useState<string>('/');
+  const [serverLoading, setServerLoading] = useState<boolean>(false);
+  const [serverError, setServerError] = useState<string>('');
+
   // WebDAV input states
   const [webdavName, setWebdavName] = useState<string>('');
   const [webdavUrl, setWebdavUrl] = useState<string>('');
@@ -1340,6 +1399,75 @@ function App() {
 
   // Link accounts
   const handleLinkAccount = async (providerName: string) => {
+    if (providerName === 'mega') {
+      setMegaEmail('');
+      setMegaPassword('');
+      setMegaError('');
+      setModal({ type: 'mega' });
+      return;
+    }
+    if (providerName === 'koofr') {
+      setKoofrUser('');
+      setKoofrPass('');
+      setKoofrError('');
+      setModal({ type: 'koofr' });
+      return;
+    }
+    if (providerName === 'mediafire') {
+      setMediafireEmail('');
+      setMediafirePassword('');
+      setMediafireError('');
+      setModal({ type: 'mediafire' });
+      return;
+    }
+    if (providerName === 'fourshared') {
+      setFoursharedEmail('');
+      setFoursharedPassword('');
+      setFoursharedError('');
+      setModal({ type: 'fourshared' });
+      return;
+    }
+    if (providerName === 'b2') {
+      setB2DisplayName('');
+      setB2KeyID('');
+      setB2AppKey('');
+      setB2Bucket('');
+      setB2Error('');
+      setModal({ type: 'b2' });
+      return;
+    }
+    if (providerName === 'smb') {
+      setSmbDisplayName('');
+      setSmbHost('');
+      setSmbShare('');
+      setSmbUsername('');
+      setSmbPassword('');
+      setSmbError('');
+      setModal({ type: 'smb' });
+      return;
+    }
+    if (providerName === 'ftp') {
+      setServerDisplayName('');
+      setServerHost('');
+      setServerPort(21);
+      setServerUsername('');
+      setServerPassword('');
+      setServerBaseDir('/');
+      setServerError('');
+      setModal({ type: 'ftp' });
+      return;
+    }
+    if (providerName === 'sftp') {
+      setServerDisplayName('');
+      setServerHost('');
+      setServerPort(22);
+      setServerUsername('');
+      setServerPassword('');
+      setServerBaseDir('/');
+      setServerError('');
+      setModal({ type: 'sftp' });
+      return;
+    }
     if (providerName === 'webdav') {
       setWebdavName('');
       setWebdavUrl('');
@@ -1762,8 +1890,9 @@ function App() {
                         {acc.provider === 'box' && <IconBox />}
                         {acc.provider === 'yandex' && <IconYandex />}
                         {acc.provider === 'pcloud' && <IconPCloud />}
+                        {acc.provider === 'mega' && <IconMega />}
                         {(acc.provider === 'telegram' || acc.provider === 'telegram_user') && <IconTelegram />}
-                        {!['google', 'onedrive', 'dropbox', 'box', 'yandex', 'pcloud', 'telegram', 'telegram_user'].includes(acc.provider) && <IconCloud />}
+                        {!['google', 'onedrive', 'dropbox', 'box', 'yandex', 'pcloud', 'mega', 'telegram', 'telegram_user'].includes(acc.provider) && <IconCloud />}
                       </div>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {acc.displayName}
@@ -2127,6 +2256,7 @@ function App() {
                               {acc.provider === 'box' && <IconBox />}
                               {acc.provider === 'yandex' && <IconYandex />}
                               {acc.provider === 'pcloud' && <IconPCloud />}
+                              {acc.provider === 'mega' && <IconMega />}
                               {acc.provider === 'telegram' && <IconTelegram />}
                               {acc.provider === 'telegram_user' && <IconTelegram />}
                               {acc.provider === 's3' && <IconSettings />}
@@ -2680,9 +2810,17 @@ function App() {
                                   {f.provider === 'box' && <IconBox />}
                                   {f.provider === 'yandex' && <IconYandex />}
                                   {f.provider === 'pcloud' && <IconPCloud />}
+                                  {f.provider === 'mega' && <IconMega />}
+                                  {f.provider === 'koofr' && <IconKoofr />}
+                                  {f.provider === 'mediafire' && <IconMediaFire />}
+                                  {f.provider === 'fourshared' && <Icon4Shared />}
+                                  {f.provider === 'b2' && <IconB2 />}
+                                  {f.provider === 'smb' && <IconSmb />}
+                                  {f.provider === 'ftp' && <IconFtp />}
+                                  {f.provider === 'sftp' && <IconSftp />}
                                   {(f.provider === 'telegram' || f.provider === 'telegram_user') && <IconTelegram />}
                                   {f.provider === 'virtual' && <IconFolder />}
-                                  {!['google', 'onedrive', 'dropbox', 'box', 'yandex', 'pcloud', 'telegram', 'telegram_user', 'virtual'].includes(f.provider) && <IconCloud />}
+                                  {!['google', 'onedrive', 'dropbox', 'box', 'yandex', 'pcloud', 'mega', 'koofr', 'mediafire', 'fourshared', 'b2', 'smb', 'ftp', 'sftp', 'telegram', 'telegram_user', 'virtual'].includes(f.provider) && <IconCloud />}
                                 </div>
                                 <span 
                                   style={{ fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' }} 
@@ -2958,6 +3096,14 @@ function App() {
                                     {acc.provider === 'box' && <IconBox />}
                                     {acc.provider === 'yandex' && <IconYandex />}
                                     {acc.provider === 'pcloud' && <IconPCloud />}
+                                    {acc.provider === 'mega' && <IconMega />}
+                                    {acc.provider === 'koofr' && <IconKoofr />}
+                                    {acc.provider === 'mediafire' && <IconMediaFire />}
+                                    {acc.provider === 'fourshared' && <Icon4Shared />}
+                                    {acc.provider === 'b2' && <IconB2 />}
+                                    {acc.provider === 'smb' && <IconSmb />}
+                                    {acc.provider === 'ftp' && <IconFtp />}
+                                    {acc.provider === 'sftp' && <IconSftp />}
                                     {acc.provider === 'telegram' && <IconTelegram />}
                                     {acc.provider === 'telegram_user' && <IconTelegram />}
                                     {acc.provider === 's3' && <IconSettings />}
@@ -4267,6 +4413,38 @@ function App() {
                   <IconSettings />
                   <span>S3 Compatible</span>
                 </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('mega')}>
+                  <IconMega />
+                  <span>MEGA</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('koofr')}>
+                  <IconKoofr />
+                  <span>Koofr</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('mediafire')}>
+                  <IconMediaFire />
+                  <span>MediaFire</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('fourshared')}>
+                  <Icon4Shared />
+                  <span>4Shared</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('b2')}>
+                  <IconB2 />
+                  <span>Backblaze B2</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('smb')}>
+                  <IconSmb />
+                  <span>Windows Share (SMB)</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('ftp')}>
+                  <IconFtp />
+                  <span>FTP Server</span>
+                </button>
+                <button className="provider-picker-btn" onClick={() => handleLinkAccount('sftp')}>
+                  <IconSftp />
+                  <span>SFTP (SSH)</span>
+                </button>
                 <button className="provider-picker-btn" onClick={() => handleLinkAccount('webdav')}>
                   <IconCloud />
                   <span>WebDAV</span>
@@ -4278,6 +4456,542 @@ function App() {
               <button className="btn btn-text" onClick={() => setModal(null)}>{t('cancel')}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {modal?.type === 'mega' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '440px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setMegaLoading(true);
+            setMegaError('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddMegaAccount(megaEmail, megaPassword);
+              showToast(lang === 'id' ? 'Akun MEGA berhasil terhubung!' : 'MEGA account connected successfully!');
+              setModal(null);
+              setMegaEmail('');
+              setMegaPassword('');
+              fetchAccounts();
+            } catch (err: any) {
+              setMegaError(err?.message || String(err));
+            } finally {
+              setMegaLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectMega')}</h3>
+            
+            {megaError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {megaError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('megaEmailLabel')}</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                placeholder="name@example.com"
+                value={megaEmail}
+                onChange={(e) => setMegaEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('megaPasswordLabel')}</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                value={megaPassword}
+                onChange={(e) => setMegaPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={megaLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={megaLoading}>
+                {megaLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {modal?.type === 'koofr' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '440px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setKoofrLoading(true);
+            setKoofrError('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddKoofrAccount(koofrUser, koofrPass);
+              showToast(lang === 'id' ? 'Akun Koofr berhasil terhubung!' : 'Koofr account connected successfully!');
+              setModal(null);
+              setKoofrUser('');
+              setKoofrPass('');
+              fetchAccounts();
+            } catch (err: any) {
+              setKoofrError(err?.message || String(err));
+            } finally {
+              setKoofrLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectKoofr')}</h3>
+            
+            {koofrError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {koofrError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('koofrUserLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                required
+                placeholder="user@example.com"
+                value={koofrUser}
+                onChange={(e) => setKoofrUser(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('koofrPassLabel')}</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                placeholder="App password generated from Koofr settings"
+                value={koofrPass}
+                onChange={(e) => setKoofrPass(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={koofrLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={koofrLoading}>
+                {koofrLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {modal?.type === 'mediafire' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '440px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setMediafireLoading(true);
+            setMediafireError('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddMediaFireAccount(mediafireEmail, mediafirePassword);
+              showToast(lang === 'id' ? 'Akun MediaFire berhasil terhubung!' : 'MediaFire account connected successfully!');
+              setModal(null);
+              setMediafireEmail('');
+              setMediafirePassword('');
+              fetchAccounts();
+            } catch (err: any) {
+              setMediafireError(err?.message || String(err));
+            } finally {
+              setMediafireLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectMediaFire')}</h3>
+            
+            {mediafireError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {mediafireError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('mediafireEmailLabel')}</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                placeholder="user@example.com"
+                value={mediafireEmail}
+                onChange={(e) => setMediafireEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('mediafirePasswordLabel')}</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                value={mediafirePassword}
+                onChange={(e) => setMediafirePassword(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={mediafireLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={mediafireLoading}>
+                {mediafireLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {modal?.type === 'fourshared' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '440px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setFoursharedLoading(true);
+            setFoursharedError('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddFourSharedAccount(foursharedEmail, foursharedPassword);
+              showToast(lang === 'id' ? 'Akun 4Shared berhasil terhubung!' : '4Shared account connected successfully!');
+              setModal(null);
+              setFoursharedEmail('');
+              setFoursharedPassword('');
+              fetchAccounts();
+            } catch (err: any) {
+              setFoursharedError(err?.message || String(err));
+            } finally {
+              setFoursharedLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectFourShared')}</h3>
+            
+            {foursharedError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {foursharedError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('foursharedEmailLabel')}</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                placeholder="user@example.com"
+                value={foursharedEmail}
+                onChange={(e) => setFoursharedEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('foursharedPasswordLabel')}</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                value={foursharedPassword}
+                onChange={(e) => setFoursharedPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={foursharedLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={foursharedLoading}>
+                {foursharedLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {modal?.type === 'b2' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '480px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setB2Loading(true);
+            setB2Error('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddB2Account(b2DisplayName || `B2 (${b2Bucket})`, b2KeyID, b2AppKey, b2Bucket);
+              showToast(lang === 'id' ? 'Backblaze B2 berhasil terhubung!' : 'Backblaze B2 connected successfully!');
+              setModal(null);
+              fetchAccounts();
+            } catch (err: any) {
+              setB2Error(err?.message || String(err));
+            } finally {
+              setB2Loading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectB2')}</h3>
+            
+            {b2Error && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {b2Error}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('displayNameLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="My B2 Storage"
+                value={b2DisplayName}
+                onChange={(e) => setB2DisplayName(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('b2KeyIDLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                required
+                value={b2KeyID}
+                onChange={(e) => setB2KeyID(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('b2AppKeyLabel')}</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                value={b2AppKey}
+                onChange={(e) => setB2AppKey(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('b2BucketLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                required
+                placeholder="my-b2-bucket"
+                value={b2Bucket}
+                onChange={(e) => setB2Bucket(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={b2Loading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={b2Loading}>
+                {b2Loading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {modal?.type === 'smb' && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '480px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setSmbLoading(true);
+            setSmbError('');
+            try {
+              // @ts-ignore
+              await window.go?.main?.App?.AddSMBAccount(smbDisplayName || `SMB (\\\\${smbHost}\\${smbShare})`, smbHost, smbShare, smbUsername, smbPassword);
+              showToast(lang === 'id' ? 'Windows Share (SMB) berhasil terhubung!' : 'Windows Share (SMB) connected successfully!');
+              setModal(null);
+              fetchAccounts();
+            } catch (err: any) {
+              setSmbError(err?.message || String(err));
+            } finally {
+              setSmbLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{t('connectSmb')}</h3>
+            
+            {smbError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {smbError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('displayNameLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Office LAN Shared Folder"
+                value={smbDisplayName}
+                onChange={(e) => setSmbDisplayName(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">{t('smbHostLabel')}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  placeholder="192.168.1.100 or Hostname"
+                  value={smbHost}
+                  onChange={(e) => setSmbHost(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t('smbShareLabel')}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  placeholder="SharedFolder"
+                  value={smbShare}
+                  onChange={(e) => setSmbShare(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">{t('smbUserLabel')}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={smbUsername}
+                  onChange={(e) => setSmbUsername(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t('smbPassLabel')}</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  required
+                  value={smbPassword}
+                  onChange={(e) => setSmbPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={smbLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={smbLoading}>
+                {smbLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {(modal?.type === 'ftp' || modal?.type === 'sftp') && (
+        <div className="modal-overlay">
+          <form className="modal-content" style={{ width: '480px' }} onSubmit={async (e) => {
+            e.preventDefault();
+            setServerLoading(true);
+            setServerError('');
+            try {
+              if (modal?.type === 'ftp') {
+                // @ts-ignore
+                await window.go?.main?.App?.AddFTPAccount(serverDisplayName || `FTP (${serverHost})`, serverHost, Number(serverPort) || 21, serverUsername, serverPassword, serverBaseDir || '/');
+                showToast(lang === 'id' ? 'Server FTP berhasil terhubung!' : 'FTP Server connected successfully!');
+              } else {
+                // @ts-ignore
+                await window.go?.main?.App?.AddSFTPAccount(serverDisplayName || `SFTP (${serverHost})`, serverHost, Number(serverPort) || 22, serverUsername, serverPassword, serverBaseDir || '/');
+                showToast(lang === 'id' ? 'Server SFTP berhasil terhubung!' : 'SFTP Server connected successfully!');
+              }
+              setModal(null);
+              fetchAccounts();
+            } catch (err: any) {
+              setServerError(err?.message || String(err));
+            } finally {
+              setServerLoading(false);
+            }
+          }}>
+            <h3 className="modal-header">{modal?.type === 'ftp' ? t('connectFtp') : t('connectSftp')}</h3>
+            
+            {serverError && (
+              <div className="alert-panel" style={{ color: 'var(--md-sys-color-error)', borderColor: 'var(--md-sys-color-error)', marginBottom: '16px' }}>
+                {serverError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('displayNameLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder={modal?.type === 'ftp' ? "My FTP Server" : "My VPS SFTP"}
+                value={serverDisplayName}
+                onChange={(e) => setServerDisplayName(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">{t('serverHostLabel')}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  placeholder="ftp.example.com or IP"
+                  value={serverHost}
+                  onChange={(e) => setServerHost(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t('serverPortLabel')}</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  required
+                  value={serverPort}
+                  onChange={(e) => setServerPort(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">{t('serverUserLabel')}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={serverUsername}
+                  onChange={(e) => setServerUsername(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t('serverPassLabel')}</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  required
+                  value={serverPassword}
+                  onChange={(e) => setServerPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('serverBaseDirLabel')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="/"
+                value={serverBaseDir}
+                onChange={(e) => setServerBaseDir(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-text" disabled={serverLoading} onClick={() => setModal(null)}>{t('cancel')}</button>
+              <button type="submit" className="btn btn-filled" disabled={serverLoading}>
+                {serverLoading ? t('connecting') : t('create')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -272,6 +272,273 @@ func (a *App) StartOAuthFlow(providerName string) (*db.AccountRecord, error) {
 	return &acc, nil
 }
 
+// AddMegaAccount verifies credentials and adds a manual MEGA account
+func (a *App) AddMegaAccount(email, password string) (*db.AccountRecord, error) {
+	p, err := provider.NewMegaProvider(email, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify MEGA credentials: %w", err)
+	}
+
+	name, userEmail, _ := p.GetUserInfo()
+	used, total, _ := p.GetQuota()
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "mega",
+		DisplayName:  name,
+		Email:        userEmail,
+		AccessToken:  password,
+		RefreshToken: "",
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save MEGA account to database: %w", err)
+	}
+
+	// Trigger async sync crawling in background
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddFTPAccount verifies credentials and adds an FTP account
+func (a *App) AddFTPAccount(displayName, host string, port int, username, password, baseDir string) (*db.AccountRecord, error) {
+	p := provider.NewFTPProvider(host, port, username, password, baseDir)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify FTP credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "ftp",
+		DisplayName:  displayName,
+		Email:        fmt.Sprintf("%s@%s:%d", username, host, port),
+		AccessToken:  fmt.Sprintf("%s|%d|%s|%s", host, port, password, baseDir),
+		RefreshToken: host,
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save FTP account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddSFTPAccount verifies credentials and adds an SFTP account
+func (a *App) AddSFTPAccount(displayName, host string, port int, username, password, baseDir string) (*db.AccountRecord, error) {
+	p := provider.NewSFTPProvider(host, port, username, password, baseDir)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify SFTP credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "sftp",
+		DisplayName:  displayName,
+		Email:        fmt.Sprintf("%s@%s:%d", username, host, port),
+		AccessToken:  fmt.Sprintf("%s|%d|%s|%s", host, port, password, baseDir),
+		RefreshToken: host,
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save SFTP account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddKoofrAccount verifies credentials and adds a Koofr account
+func (a *App) AddKoofrAccount(username, password string) (*db.AccountRecord, error) {
+	p := provider.NewKoofrProvider(username, password)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify Koofr credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "koofr",
+		DisplayName:  "Koofr (" + username + ")",
+		Email:        username,
+		AccessToken:  password,
+		RefreshToken: "",
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save Koofr account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddMediaFireAccount verifies credentials and adds a MediaFire account
+func (a *App) AddMediaFireAccount(email, password string) (*db.AccountRecord, error) {
+	p := provider.NewMediaFireProvider(email, password)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify MediaFire credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "mediafire",
+		DisplayName:  "MediaFire (" + email + ")",
+		Email:        email,
+		AccessToken:  password,
+		RefreshToken: "",
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save MediaFire account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddFourSharedAccount verifies credentials and adds a 4Shared account
+func (a *App) AddFourSharedAccount(email, password string) (*db.AccountRecord, error) {
+	p := provider.NewFourSharedProvider(email, password)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify 4Shared credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "fourshared",
+		DisplayName:  "4Shared (" + email + ")",
+		Email:        email,
+		AccessToken:  password,
+		RefreshToken: "",
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save 4Shared account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddB2Account verifies credentials and adds a Backblaze B2 Native account
+func (a *App) AddB2Account(displayName, keyID, applicationKey, bucketName string) (*db.AccountRecord, error) {
+	p := provider.NewB2Provider(keyID, applicationKey, bucketName)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify Backblaze B2 credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "b2",
+		DisplayName:  displayName,
+		Email:        keyID,
+		AccessToken:  applicationKey,
+		RefreshToken: bucketName,
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save Backblaze B2 account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
+// AddSMBAccount verifies credentials and adds an SMB LAN Share account
+func (a *App) AddSMBAccount(displayName, host, share, username, password string) (*db.AccountRecord, error) {
+	p := provider.NewSMBProvider(host, share, username, password)
+	used, total, err := p.GetQuota()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify SMB Share credentials: %w", err)
+	}
+
+	acc := db.AccountRecord{
+		ID:           uuid.New().String(),
+		Provider:     "smb",
+		DisplayName:  displayName,
+		Email:        fmt.Sprintf("%s@\\\\%s\\%s", username, host, share),
+		AccessToken:  fmt.Sprintf("%s|%s|%s", host, share, password),
+		RefreshToken: host,
+		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),
+		UsedSpace:    used,
+		TotalSpace:   total,
+		Active:       true,
+	}
+
+	err = a.database.SaveAccount(acc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save SMB account to database: %w", err)
+	}
+
+	go func() {
+		_ = a.syncMgr.SyncAccount(acc, p)
+	}()
+
+	return &acc, nil
+}
+
 // AddWebDAVAccount verifies credentials and adds a manual WebDAV account
 func (a *App) AddWebDAVAccount(displayName, serverURL, username, password string) (*db.AccountRecord, error) {
 	p := provider.NewWebDAVProvider(username, password, serverURL)

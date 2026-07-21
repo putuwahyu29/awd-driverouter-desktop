@@ -6,6 +6,7 @@ import (
 	"driverouter/backend/router"
 	"fmt"
 	"log"
+	"strings"
 	gosync "sync"
 	"time"
 
@@ -192,6 +193,53 @@ func FetchActiveProviderClient(database *db.DB, acc db.AccountRecord, onTokenRef
 		return provider.NewYandexProvider(clientID, clientSecret, &tok, wrappedOnRefresh), nil
 	case "pcloud":
 		return provider.NewPCloudProvider(clientID, clientSecret, &tok, wrappedOnRefresh), nil
+	case "mega":
+		return provider.NewMegaProvider(acc.Email, acc.AccessToken)
+	case "koofr":
+		return provider.NewKoofrProvider(acc.Email, acc.AccessToken), nil
+	case "mediafire":
+		return provider.NewMediaFireProvider(acc.Email, acc.AccessToken), nil
+	case "fourshared":
+		return provider.NewFourSharedProvider(acc.Email, acc.AccessToken), nil
+	case "b2":
+		return provider.NewB2Provider(acc.Email, acc.AccessToken, acc.RefreshToken), nil
+	case "smb":
+		parts := strings.Split(acc.AccessToken, "|")
+		host := acc.RefreshToken
+		share := ""
+		pass := ""
+		if len(parts) >= 3 {
+			host = parts[0]
+			share = parts[1]
+			pass = parts[2]
+		}
+		return provider.NewSMBProvider(host, share, acc.Email, pass), nil
+	case "ftp":
+		parts := strings.Split(acc.AccessToken, "|")
+		host := acc.RefreshToken
+		port := 21
+		pass := ""
+		baseDir := "/"
+		if len(parts) >= 4 {
+			host = parts[0]
+			fmt.Sscanf(parts[1], "%d", &port)
+			pass = parts[2]
+			baseDir = parts[3]
+		}
+		return provider.NewFTPProvider(host, port, acc.DisplayName, pass, baseDir), nil
+	case "sftp":
+		parts := strings.Split(acc.AccessToken, "|")
+		host := acc.RefreshToken
+		port := 22
+		pass := ""
+		baseDir := "/"
+		if len(parts) >= 4 {
+			host = parts[0]
+			fmt.Sscanf(parts[1], "%d", &port)
+			pass = parts[2]
+			baseDir = parts[3]
+		}
+		return provider.NewSFTPProvider(host, port, acc.DisplayName, pass, baseDir), nil
 	case "webdav":
 		return provider.NewWebDAVProvider(acc.Email, acc.AccessToken, acc.RefreshToken), nil
 	case "s3":
