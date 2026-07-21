@@ -50,6 +50,16 @@ func (a *App) startup(ctx context.Context) {
 		a.minimizeToTray = true // default to true
 	}
 
+	// Ensure auto startup registry setting matches database preference
+	autoStartupStr, err := database.GetSetting("auto_startup")
+	if err == nil {
+		if autoStartupStr == "true" && !a.IsStartupEnabled() {
+			a.SetStartup(true)
+		} else if autoStartupStr == "false" && a.IsStartupEnabled() {
+			a.SetStartup(false)
+		}
+	}
+
 	a.startTray()
 	a.startUploadWebSocketServer()
 	a.StartBackupService()

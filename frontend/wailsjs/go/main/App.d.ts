@@ -64,6 +64,8 @@ export function GetVirtualFolders():Promise<Array<db.FileRecord>>;
 
 export function GetWSAuthToken():Promise<string>;
 
+export function IsStartupEnabled():Promise<boolean>;
+
 export function OpenFileInBrowser(arg1:string):Promise<void>;
 
 export function OpenReleaseURL(arg1:string):Promise<void>;
@@ -93,6 +95,8 @@ export function SelectBackupFolder():Promise<string>;
 export function SendTelegramCode(arg1:string):Promise<string>;
 
 export function SetFileGeneralAccess(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SetStartup(arg1:boolean):Promise<Record<string, any>>;
 
 export function ShowWindow():Promise<void>;
 

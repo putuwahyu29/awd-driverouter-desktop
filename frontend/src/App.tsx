@@ -139,6 +139,7 @@ function App() {
   // Local Settings Options
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [minToTray, setMinToTray] = useState<boolean>(true);
+  const [autoStartup, setAutoStartup] = useState<boolean>(false);
   const [backupInterval, setBackupInterval] = useState<number>(60);
   const langRef = useRef<'en' | 'id'>('en');
 
@@ -367,6 +368,12 @@ function App() {
     // Load initial accounts and settings
     fetchAccounts();
     fetchSettings();
+
+    // Check if auto startup is enabled in OS
+    // @ts-ignore
+    window.go?.main?.App?.IsStartupEnabled?.()?.then((enabled: boolean) => {
+      setAutoStartup(!!enabled);
+    });
     
     // Setup background theme
     const localTheme = localStorage.getItem('driverouter-theme') as 'light' | 'dark' | null;
@@ -873,6 +880,9 @@ function App() {
         }
         if (data.minimize_to_tray) {
           setMinToTray(data.minimize_to_tray === 'true');
+        }
+        if (data.auto_startup) {
+          setAutoStartup(data.auto_startup === 'true');
         }
         if (data.backup_interval) {
           setBackupInterval(parseInt(data.backup_interval) || 60);
@@ -3286,6 +3296,38 @@ function App() {
                 </label>
                 <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
                   {t('minimizeToTrayDesc')}
+                </p>
+              </div>
+
+              {/* Auto Startup Setting */}
+              <div className="form-group" style={{ marginBottom: '28px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="form-label" style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={autoStartup}
+                    onChange={async (e) => {
+                      const enabled = e.target.checked;
+                      setAutoStartup(enabled);
+                      try {
+                        // @ts-ignore
+                        const res = await window.go?.main?.App?.SetStartup(enabled);
+                        if (res && res.success === false) {
+                          setAutoStartup(!enabled);
+                          showInfoDialog("Error", "Failed to update startup setting: " + res.error);
+                        } else {
+                          showToast(enabled ? (lang === 'id' ? 'Startup otomatis diaktifkan' : 'Auto startup enabled') : (lang === 'id' ? 'Startup otomatis dinonaktifkan' : 'Auto startup disabled'));
+                        }
+                      } catch (err) {
+                        setAutoStartup(!enabled);
+                        showInfoDialog("Error", "Failed to update startup setting: " + err);
+                      }
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span>{t('autoStartupSetting')}</span>
+                </label>
+                <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
+                  {t('autoStartupDesc')}
                 </p>
               </div>
 

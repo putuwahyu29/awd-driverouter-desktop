@@ -122,6 +122,10 @@ export function GetWSAuthToken() {
   return window['go']['main']['App']['GetWSAuthToken']();
 }
 
+export function IsStartupEnabled() {
+  return window['go']['main']['App']['IsStartupEnabled']();
+}
+
 export function OpenFileInBrowser(arg1) {
   return window['go']['main']['App']['OpenFileInBrowser'](arg1);
 }
@@ -180,6 +184,10 @@ export function SendTelegramCode(arg1) {
 
 export function SetFileGeneralAccess(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetFileGeneralAccess'](arg1, arg2, arg3);
+}
+
+export function SetStartup(arg1) {
+  return window['go']['main']['App']['SetStartup'](arg1);
 }
 
 export function ShowWindow() {
