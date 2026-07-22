@@ -60,6 +60,8 @@ func (sm *SyncManager) SyncAccount(acc db.AccountRecord, p provider.Provider) er
 
 	// Keep track of visited physical items to detect cycles or issues
 	visited := make(map[string]bool)
+	// Keep track of all virtual IDs found on remote provider for this account
+	syncedVirtualIDs := make(map[string]bool)
 
 	for len(queue) > 0 {
 		current := queue[0]
@@ -106,6 +108,9 @@ func (sm *SyncManager) SyncAccount(acc db.AccountRecord, p provider.Provider) er
 				physicalMap = make(router.PhysicalIDsMap)
 			}
 
+			// Mark this virtualID as synced for this account
+			syncedVirtualIDs[virtualID] = true
+
 			// Add/Update this provider's mapping
 			physicalMap[acc.ID] = item.PhysicalID
 			serializedMap, _ := router.SerializePhysicalIDs(physicalMap)
@@ -143,6 +148,22 @@ func (sm *SyncManager) SyncAccount(acc db.AccountRecord, p provider.Provider) er
 					virtualParentID: virtualID,
 					virtualPath:     itemVirtualPath,
 				})
+			}
+		}
+	}
+
+	// Clean up stale files for this account only if full crawl succeeded and found items
+	if len(syncedVirtualIDs) > 0 {
+		existingAccountFiles, err := sm.Database.GetFilesByAccount(acc.ID)
+		if err == nil {
+			for _, f := range existingAccountFiles {
+				if f.ID != "root" && !syncedVirtualIDs[f.ID] {
+					// Only cleanup if physical ID map belongs solely to this account
+					physMap, _ := router.DeserializePhysicalIDs(f.PhysicalID)
+					if len(physMap) <= 1 {
+						_ = sm.Database.DeleteFile(f.ID)
+					}
+				}
 			}
 		}
 	}
@@ -266,42 +287,50 @@ func FetchActiveProviderClient(database *db.DB, acc db.AccountRecord, onTokenRef
 	}
 }
 
-// SyncAllDrives triggers sync across all connected and active drives.
+// SyncAllDrives triggers sync across all connected and active drives concurrently.
 func (sm *SyncManager) SyncAllDrives() error {
 	accounts, err := sm.Database.GetAccounts()
 	if err != nil {
 		return err
 	}
 
+	var wg gosync.WaitGroup
 	for _, acc := range accounts {
 		if !acc.Active {
 			continue
 		}
 
-		// Closure to save refreshed token in-memory only
-		onRefresh := func(newToken *oauth2.Token) {
-			CacheToken(acc.ID, newToken)
-			log.Printf("Token refreshed and cached in-memory for account %s (%s)", acc.DisplayName, acc.Email)
-		}
+		wg.Add(1)
+		go func(acc db.AccountRecord) {
+			defer wg.Done()
 
-		p, err := FetchActiveProviderClient(sm.Database, acc, onRefresh)
-		if err != nil {
-			log.Printf("Error creating client for account %s: %v", acc.DisplayName, err)
-			continue
-		}
+			// Closure to save refreshed token in-memory only
+			onRefresh := func(newToken *oauth2.Token) {
+				CacheToken(acc.ID, newToken)
+				log.Printf("Token refreshed and cached in-memory for account %s (%s)", acc.DisplayName, acc.Email)
+			}
 
-		// Update quota on each sync
-		used, total, qErr := p.GetQuota()
-		if qErr == nil {
-			acc.UsedSpace = used
-			acc.TotalSpace = total
-			_ = sm.Database.SaveAccount(acc)
-		}
+			p, err := FetchActiveProviderClient(sm.Database, acc, onRefresh)
+			if err != nil {
+				log.Printf("Error creating client for account %s: %v", acc.DisplayName, err)
+				return
+			}
 
-		err = sm.SyncAccount(acc, p)
-		if err != nil {
-			log.Printf("Sync failed for account %s: %v", acc.DisplayName, err)
-		}
+			// Update quota on each sync
+			used, total, qErr := p.GetQuota()
+			if qErr == nil {
+				acc.UsedSpace = used
+				acc.TotalSpace = total
+				_ = sm.Database.SaveAccount(acc)
+			}
+
+			err = sm.SyncAccount(acc, p)
+			if err != nil {
+				log.Printf("Sync failed for account %s: %v", acc.DisplayName, err)
+			}
+		}(acc)
 	}
+
+	wg.Wait()
 	return nil
 }

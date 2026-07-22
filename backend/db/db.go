@@ -71,10 +71,11 @@ func InitDB() (*DB, error) {
 // InitDBFromPath initializes the SQLite database at the given path.
 // This is used by tests to create isolated temporary databases.
 func InitDBFromPath(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite", dbPath)
+	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	conn.SetMaxOpenConns(1) // Prevent concurrent write locks in SQLite
 
 	// Create tables if they don't exist
 	queries := []string{
@@ -447,6 +448,44 @@ func (db *DB) FindFileByPhysicalID(accountID, physicalID string) (FileRecord, er
 	}
 
 	return f, nil
+}
+
+// GetFilesByAccount retrieves all active file records associated with a specific cloud account ID.
+func (db *DB) GetFilesByAccount(accountID string) ([]FileRecord, error) {
+	rows, err := db.Conn.Query(
+		"SELECT id, name, size, is_folder, parent_id, provider, account_id, physical_id, created_at, modified_at, starred, shared FROM files WHERE deleted = 0 AND (account_id = ? OR physical_id LIKE ?)",
+		accountID, "%\""+accountID+"\":%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []FileRecord
+	for rows.Next() {
+		var f FileRecord
+		var isFolderInt, starredInt, sharedInt int
+		var createdStr, modifiedStr string
+
+		err := rows.Scan(&f.ID, &f.Name, &f.Size, &isFolderInt, &f.ParentID, &f.Provider, &f.AccountID, &f.PhysicalID, &createdStr, &modifiedStr, &starredInt, &sharedInt)
+		if err != nil {
+			return nil, err
+		}
+
+		f.IsFolder = isFolderInt == 1
+		f.Starred = starredInt == 1
+		f.Shared = sharedInt == 1
+
+		if t, err := time.Parse(time.RFC3339, createdStr); err == nil {
+			f.CreatedAt = t
+		}
+		if t, err := time.Parse(time.RFC3339, modifiedStr); err == nil {
+			f.ModifiedAt = t
+		}
+
+		list = append(list, f)
+	}
+	return list, nil
 }
 
 // DeleteFile marks a file or folder record as deleted (soft delete), including its children recursively if it's a folder.

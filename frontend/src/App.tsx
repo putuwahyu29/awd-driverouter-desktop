@@ -585,24 +585,36 @@ function App() {
   useEffect(() => {
     setSelectedIDs([]);
     setSelectedFile(null);
+    setFiles([]); // Clear previous view data immediately on menu switch
+
     if (view === 'explorer') {
-      fetchFiles(parentID);
+      fetchFiles(parentID, true);
+
+      // Realtime listener when background sync updates database files
+      const offFilesUpdated = EventsOn('files-updated', (updatedParentID: string) => {
+        if (updatedParentID === parentID) {
+          fetchFiles(parentID, false);
+        }
+      });
 
       const interval = setInterval(() => {
         GetFiles(parentID, false, searchKeyword).then(list => {
           setFiles(list || []);
         }).catch(e => console.error(e));
-      }, 10000); // Poll every 10 seconds
+      }, 10000); // Background refresh every 10 seconds
 
-      return () => clearInterval(interval);
+      return () => {
+        if (offFilesUpdated) offFilesUpdated();
+        clearInterval(interval);
+      };
     } else if (view === 'starred') {
-      fetchStarredFiles();
+      fetchStarredFiles(true);
     } else if (view === 'recent') {
-      fetchRecentFiles();
+      fetchRecentFiles(true);
     } else if (view === 'shared') {
-      fetchFiles('__shared__');
+      fetchFiles('__shared__', true);
     } else if (view === 'trash') {
-      fetchTrashedFiles();
+      fetchTrashedFiles(true);
     } else if (view === 'home') {
       fetchGeneralActivities();
     } else if (view === 'settings') {
@@ -714,8 +726,8 @@ function App() {
     }
   }, [selectedFile, detailsTab, detailsSidebar]);
 
-  const fetchRecentFiles = async () => {
-    setLoading(true);
+  const fetchRecentFiles = async (showFullLoading: boolean = true) => {
+    if (showFullLoading) setLoading(true);
     try {
       const list = await GetRecentFiles();
       setFiles(list || []);
@@ -864,8 +876,8 @@ function App() {
     }
   };
 
-  const fetchTrashedFiles = async () => {
-    setLoading(true);
+  const fetchTrashedFiles = async (showFullLoading: boolean = true) => {
+    if (showFullLoading) setLoading(true);
     try {
       const list = await GetTrashedFiles();
       setFiles(list || []);
@@ -952,8 +964,8 @@ function App() {
     }
   };
 
-  const fetchFiles = async (pId: string) => {
-    setLoading(true);
+  const fetchFiles = async (pId: string, showFullLoading: boolean = true) => {
+    if (showFullLoading) setLoading(true);
     try {
       const list = await GetFiles(pId, false, searchKeyword);
       setFiles(list || []);
@@ -964,8 +976,8 @@ function App() {
     }
   };
 
-  const fetchStarredFiles = async () => {
-    setLoading(true);
+  const fetchStarredFiles = async (showFullLoading: boolean = true) => {
+    if (showFullLoading) setLoading(true);
     try {
       const list = await GetFiles('', true, searchKeyword);
       setFiles(list || []);
@@ -2369,7 +2381,12 @@ function App() {
 
         {/* File Explorer (My Drive / Starred / Shared / Recent views) */}
         {(view === 'explorer' || view === 'starred' || view === 'shared' || view === 'recent' || view === 'trash') && (
-          <div className="explorer-body">
+          <div className="explorer-body" style={{ position: 'relative' }}>
+            {loading && files.length > 0 && (
+              <div className="top-linear-progress">
+                <div className="top-linear-progress-bar"></div>
+              </div>
+            )}
             <div className="explorer-header">
               {view === 'explorer' && (
                 <div className="breadcrumbs">
@@ -2493,7 +2510,7 @@ function App() {
                 </div>
               )}
 
-              {loading ? (
+              {loading && files.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: '100px', gap: '16px' }}>
                   <div className="loading-spinner" style={{ width: '40px', height: '40px', border: '3px solid var(--md-sys-color-surface-variant)', borderTop: '3px solid var(--md-sys-color-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                   <p style={{ fontSize: '14px', color: 'var(--md-sys-color-on-surface-variant)' }}>{t('loadingData')}</p>

@@ -1,5 +1,29 @@
 [
   {
+    "version": "1.0.1",
+    "date": "2026-07-22",
+    "title": {
+      "id": "Awd DriveRouter v1.0.1 - Peningkatan Responsivitas & Pembaruan Otomatis",
+      "en": "Awd DriveRouter v1.0.1 - Faster Loading & Automatic Refresh"
+    },
+    "changes": {
+      "id": [
+        "Tampilan daftar file kini terbuka seketika tanpa perlu menunggu loading lama saat memuat folder.",
+        "Penyamaan data dari berbagai akun penyimpan cloud berjalan serentak di latar belakang.",
+        "Tampilan file ter-refresh secara otomatis begitu ada pembaruan data dari cloud.",
+        "Kestabilan penyimpanan lokal ditingkatkan agar tidak terjadi hambatan saat membaca atau menulis file.",
+        "Daftar file kini secara otomatis dibersihkan jika akun terputus atau file terhapus di server cloud."
+      ],
+      "en": [
+        "File list opens instantly without freezing or long loading screens when browsing folders.",
+        "Multi-cloud drive data syncing now runs simultaneously in the background.",
+        "File view automatically updates on screen whenever new data arrives from cloud accounts.",
+        "Enhanced local database stability for smoother performance.",
+        "File list automatically stays consistent when an account is unlinked or files are deleted in the cloud."
+      ]
+    }
+  },
+  {
     "version": "1.0.0",
     "date": "2026-07-21",
     "title": {

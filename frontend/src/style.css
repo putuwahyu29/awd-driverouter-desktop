@@ -1535,4 +1535,39 @@ body {
   animation: fadeInUp 0.2s ease-out forwards;
 }
 
+/* Linear progress bar for subtle background refreshes */
+@keyframes progressIndeterminate {
+  0% {
+    left: -35%;
+    width: 35%;
+  }
+  60% {
+    left: 100%;
+    width: 100%;
+  }
+  100% {
+    left: 100%;
+    width: 100%;
+  }
+}
+
+.top-linear-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: var(--md-sys-color-surface-variant);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.top-linear-progress-bar {
+  position: absolute;
+  background-color: var(--md-sys-color-primary);
+  height: 100%;
+  animation: progressIndeterminate 1.5s infinite ease-in-out;
+}
+
+
 

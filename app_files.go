@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	gosync "sync"
 	"time"
 
 	"driverouter/backend/db"
@@ -14,9 +15,10 @@ import (
 	"driverouter/backend/sync"
 
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// GetFiles lists virtual files/folders inside a parent ID, updating metadata in real-time.
+// GetFiles lists virtual files/folders inside a parent ID immediately from local index, while updating metadata asynchronously in the background.
 func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileRecord, error) {
 	if parentID == "__shared__" {
 		return a.getSharedFiles(search)
@@ -26,14 +28,13 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 		parentID = "root"
 	}
 
-	// Trigger real-time remote sync for the directory listing
+	// Trigger async background remote sync for directory reconciliation so UI never blocks
 	if !starred && search == "" {
-		// Clean up files in the database that are marked as 'shared' but might have been moved to root by reconciliation
-		// or vice-versa, to ensure My Drive and Shared views stay separate.
-		// Note: Shared files from getSharedFiles are dynamic, but if they ever got saved to DB, we must filter them.
-
-		accounts, err := a.database.GetAccounts()
-		if err == nil {
+		go func(pID string) {
+			accounts, err := a.database.GetAccounts()
+			if err != nil {
+				return
+			}
 			var activeAccounts []db.AccountRecord
 			for _, acc := range accounts {
 				if acc.Active {
@@ -41,7 +42,6 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 				}
 			}
 
-			// Gather remote items from active accounts
 			type remoteItem struct {
 				meta  provider.FileMetadata
 				accID string
@@ -49,44 +49,62 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 			var allRemoteItems []remoteItem
 			queriedAccounts := make(map[string]bool)
 
-			if parentID == "root" {
+			if pID == "root" {
+				var wg gosync.WaitGroup
+				var mu gosync.Mutex
 				for _, acc := range activeAccounts {
-					p, err := sync.FetchActiveProviderClient(a.database, acc, nil)
-					if err == nil {
-						items, err := p.ListDirectory("root")
+					wg.Add(1)
+					go func(acc db.AccountRecord) {
+						defer wg.Done()
+						p, err := sync.FetchActiveProviderClient(a.database, acc, nil)
 						if err == nil {
-							queriedAccounts[acc.ID] = true
-							for _, item := range items {
-								allRemoteItems = append(allRemoteItems, remoteItem{meta: item, accID: acc.ID})
+							items, err := p.ListDirectory("root")
+							if err == nil {
+								mu.Lock()
+								queriedAccounts[acc.ID] = true
+								for _, item := range items {
+									allRemoteItems = append(allRemoteItems, remoteItem{meta: item, accID: acc.ID})
+								}
+								mu.Unlock()
 							}
 						}
-					}
+					}(acc)
 				}
+				wg.Wait()
 			} else {
-				vFolder, err := a.database.GetFile(parentID)
+				vFolder, err := a.database.GetFile(pID)
 				if err == nil {
 					physicalMap, err := router.DeserializePhysicalIDs(vFolder.PhysicalID)
 					if err == nil {
+						var wg gosync.WaitGroup
+						var mu gosync.Mutex
 						for _, acc := range activeAccounts {
 							if physFolderID, exists := physicalMap[acc.ID]; exists {
-								p, err := sync.FetchActiveProviderClient(a.database, acc, nil)
-								if err == nil {
-									items, err := p.ListDirectory(physFolderID)
+								wg.Add(1)
+								go func(acc db.AccountRecord, physFolderID string) {
+									defer wg.Done()
+									p, err := sync.FetchActiveProviderClient(a.database, acc, nil)
 									if err == nil {
-										queriedAccounts[acc.ID] = true
-										for _, item := range items {
-											allRemoteItems = append(allRemoteItems, remoteItem{meta: item, accID: acc.ID})
+										items, err := p.ListDirectory(physFolderID)
+										if err == nil {
+											mu.Lock()
+											queriedAccounts[acc.ID] = true
+											for _, item := range items {
+												allRemoteItems = append(allRemoteItems, remoteItem{meta: item, accID: acc.ID})
+											}
+											mu.Unlock()
 										}
 									}
-								}
+								}(acc, physFolderID)
 							}
 						}
+						wg.Wait()
 					}
 				}
 			}
 
-			// Reconcile remote items with database
-			localFiles, err := a.database.GetFiles(parentID, false, "")
+			// Reconcile remote items with local database asynchronously
+			localFiles, err := a.database.GetFiles(pID, false, "")
 			if err == nil {
 				localMap := make(map[string]db.FileRecord)
 				for _, lf := range localFiles {
@@ -96,7 +114,6 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 
 				seenLocalIDs := make(map[string]bool)
 
-				// Process remote items
 				for _, ri := range allRemoteItems {
 					key := fmt.Sprintf("%s_%t", ri.meta.Name, ri.meta.IsFolder)
 					existing, found := localMap[key]
@@ -117,12 +134,9 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 							_ = a.database.SaveFile(existing)
 						}
 					} else {
-						// Self-healing: Check if the file already exists in the database under a different parent ID
-						// Only heal if the existing record is NOT a shared file, to prevent shared files leaking into My Drive.
 						existingGlobal, err := a.database.FindFileByPhysicalID(ri.accID, ri.meta.PhysicalID)
 						if err == nil && existingGlobal.ParentID != "shared" {
-							// Found! Align parent_id to the current parentID and update details
-							existingGlobal.ParentID = parentID
+							existingGlobal.ParentID = pID
 							existingGlobal.Size = ri.meta.Size
 							existingGlobal.ModifiedAt = ri.meta.ModifiedAt
 
@@ -146,7 +160,7 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 								Name:       ri.meta.Name,
 								Size:       ri.meta.Size,
 								IsFolder:   ri.meta.IsFolder,
-								ParentID:   parentID,
+								ParentID:   pID,
 								Provider:   ri.meta.Provider,
 								AccountID:  ri.accID,
 								PhysicalID: ser,
@@ -155,14 +169,12 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 								Starred:    false,
 							}
 							_ = a.database.SaveFile(rec)
-							// Update local map to prevent duplicates
 							localMap[key] = rec
 							seenLocalIDs[newID] = true
 						}
 					}
 				}
 
-				// Remove stale listings for queried accounts
 				for _, lf := range localFiles {
 					if !seenLocalIDs[lf.ID] {
 						physMap, _ := router.DeserializePhysicalIDs(lf.PhysicalID)
@@ -186,8 +198,13 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 						}
 					}
 				}
+
+				// Emit event to frontend to refresh UI seamlessly when new files/updates arrive
+				if a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "files-updated", parentID)
+				}
 			}
-		}
+		}(parentID)
 	}
 
 	return a.database.GetFiles(parentID, starred, search)
