@@ -66,6 +66,8 @@ jobs:
         run: |
           choco install nsis upx -y
           echo "C:\Program Files (x86)\NSIS" >> $GITHUB_PATH
+          echo "C:\Program Files\NSIS" >> $GITHUB_PATH
+          echo "C:\tools\nsis" >> $GITHUB_PATH
         shell: bash
 
       - name: Build Application
@@ -122,9 +124,10 @@ jobs:
             cp "artifacts/awd-driverouter-windows/Awd-DriveRouter.exe" "release-dist/awd-driverouter-${VERSION_CLEAN}-windows-amd64.exe"
           fi
           
-          # Windows Installer
-          if [ -f "artifacts/awd-driverouter-windows/Awd-DriveRouter-amd64-installer.exe" ]; then
-            cp "artifacts/awd-driverouter-windows/Awd-DriveRouter-amd64-installer.exe" "release-dist/awd-driverouter-${VERSION_CLEAN}-windows-amd64-installer.exe"
+          # Windows Installer (Flexibly match any installer .exe)
+          INSTALLER_FILE=$(find artifacts/awd-driverouter-windows -maxdepth 1 -name "*installer.exe" 2>/dev/null | head -n 1)
+          if [ -n "$INSTALLER_FILE" ]; then
+            cp "$INSTALLER_FILE" "release-dist/awd-driverouter-${VERSION_CLEAN}-windows-amd64-installer.exe"
           fi
           
           # macOS

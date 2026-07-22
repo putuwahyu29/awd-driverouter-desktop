@@ -1830,8 +1830,14 @@ function App() {
   };
 
   const getAccountQuotaLabel = (acc: AccountRecord) => {
-    if (acc.provider === 'onedrive' && acc.totalSpace === 0 && acc.usedSpace === 0) {
+    if (acc.provider === 'telegram' || acc.provider === 'telegram_user') {
+      return `${formatBytes(acc.usedSpace)} / ${t('quotaUnlimited')}`;
+    }
+    if (acc.totalSpace === 0 && acc.usedSpace === 0) {
       return t('quotaUnavailable');
+    }
+    if (acc.totalSpace === 0 || acc.totalSpace <= acc.usedSpace) {
+      return `${formatBytes(acc.usedSpace)} ${t('quotaUsedOnly')}`;
     }
 
     return `${formatBytes(acc.usedSpace)} / ${formatBytes(acc.totalSpace)}`;
@@ -3111,9 +3117,16 @@ function App() {
                                   </div>
                                   <div>
                                     <h4 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>{acc.displayName}</h4>
-                                    <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'capitalize' }}>
-                                      {acc.provider.replace('_', ' ')}
-                                    </span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)', textTransform: 'capitalize' }}>
+                                        {acc.provider.replace('_', ' ')}
+                                      </span>
+                                      {acc.email && (
+                                        <span style={{ fontSize: '11px', color: 'var(--md-sys-color-primary)', fontWeight: '500' }}>
+                                          {acc.email}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', padding: '4px 10px', borderRadius: '100px', backgroundColor: acc.active ? 'rgba(52, 168, 83, 0.15)' : 'rgba(128, 128, 128, 0.15)', color: acc.active ? '#34a853' : '#808080' }}>
@@ -3129,7 +3142,13 @@ function App() {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
                                   <span>{getAccountQuotaLabel(acc)}</span>
-                                  <span style={{ fontWeight: '500', color: 'var(--md-sys-color-primary)' }}>{formatBytes(freeSpace)} free</span>
+                                  <span style={{ fontWeight: '500', color: 'var(--md-sys-color-primary)' }}>
+                                    {acc.provider === 'telegram' || acc.provider === 'telegram_user'
+                                      ? t('quotaUnlimited')
+                                      : acc.totalSpace > 0 && acc.totalSpace > acc.usedSpace
+                                      ? `${formatBytes(freeSpace)} free`
+                                      : t('unlimitedQuotaLabel')}
+                                  </span>
                                 </div>
                               </div>
                             </div>
