@@ -15,7 +15,7 @@ FROM golang:1.22-alpine AS backend-builder
 WORKDIR /app
 
 # Install build dependencies if needed
-RUN apk add --no-ca-certificates git gcc musl-dev
+RUN apk add --no-cache git gcc musl-dev
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -30,7 +30,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o driverout
 # Stage 3: Minimal Runtime Container
 FROM alpine:latest
 
-RUN apk add --no-ca-certificates ca-certificates tzdata fuse
+RUN apk add --no-cache ca-certificates tzdata fuse
 
 WORKDIR /app
 
