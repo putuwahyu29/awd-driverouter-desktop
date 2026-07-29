@@ -5,6 +5,11 @@ package main
 import (
 	_ "embed"
 	"encoding/binary"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	stdruntime "runtime"
 	"syscall"
 	"unsafe"
 
@@ -169,11 +174,15 @@ func (a *App) runTrayLoop() {
 				a.ShowWindow()
 			case ID_TRAY_ABOUT:
 				a.ShowWindow()
-				runtime.EventsEmit(a.ctx, "menu:navigate", "about")
+				if !a.isHeadless && a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "menu:navigate", "about")
+				}
 			case ID_TRAY_CHECK_UPDATE:
 				a.ShowWindow()
-				runtime.EventsEmit(a.ctx, "menu:navigate", "about")
-				runtime.EventsEmit(a.ctx, "menu:check-updates")
+				if !a.isHeadless && a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "menu:navigate", "about")
+					runtime.EventsEmit(a.ctx, "menu:check-updates")
+				}
 			case ID_TRAY_QUIT:
 				shellNotifyIcon(NIM_DELETE, &trayNID)
 				procPostQuitMessage.Call(0)
@@ -275,15 +284,47 @@ func (a *App) showTrayMenu(hwnd windows.HWND) {
 	procDestroyMenu.Call(hMenu)
 }
 
+func (a *App) openHeadlessBrowser() {
+	port := a.headlessPort
+	if port == 0 {
+		port = 8080
+	}
+	url := fmt.Sprintf("http://localhost:%d", port)
+	var err error
+	switch stdruntime.GOOS {
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = exec.Command("xdg-open", url).Start()
+	}
+	if err != nil {
+		log.Printf("Failed to open browser: %v", err)
+	}
+}
+
 func (a *App) ShowWindow() {
-	runtime.WindowShow(a.ctx)
-	runtime.WindowUnminimise(a.ctx)
-	runtime.WindowSetAlwaysOnTop(a.ctx, true)
-	runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	if a.isHeadless {
+		a.openHeadlessBrowser()
+		return
+	}
+	if a.ctx != nil {
+		runtime.WindowShow(a.ctx)
+		runtime.WindowUnminimise(a.ctx)
+		runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	}
 }
 
 func (a *App) QuitApp() {
 	a.quitting = true
-	runtime.Quit(a.ctx)
+	if a.isHeadless {
+		os.Exit(0)
+		return
+	}
+	if a.ctx != nil {
+		runtime.Quit(a.ctx)
+	}
 }
 

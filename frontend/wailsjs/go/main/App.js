@@ -294,6 +294,10 @@ export function SyncDrives() {
   return window['go']['main']['App']['SyncDrives']();
 }
 
+export function ToggleAccountActive(arg1) {
+  return window['go']['main']['App']['ToggleAccountActive'](arg1);
+}
+
 export function TogglePublicTunnel(arg1) {
   return window['go']['main']['App']['TogglePublicTunnel'](arg1);
 }

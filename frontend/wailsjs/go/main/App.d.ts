@@ -150,6 +150,8 @@ export function StopNativeWebDAVServer():Promise<void>;
 
 export function SyncDrives():Promise<void>;
 
+export function ToggleAccountActive(arg1:string):Promise<boolean>;
+
 export function TogglePublicTunnel(arg1:boolean):Promise<string>;
 
 export function ToggleStarred(arg1:string,arg2:boolean):Promise<void>;

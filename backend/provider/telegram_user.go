@@ -457,12 +457,15 @@ func (h *TelegramLoginHelper) StartLogin(phone string, apiID int, apiHash string
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.Phone = phone
+	h.Phone = strings.TrimSpace(phone)
 	h.APIID = apiID
-	h.APIHash = apiHash
+	h.APIHash = strings.TrimSpace(apiHash)
 	if h.cancelFunc != nil {
 		h.cancelFunc()
 	}
+
+	// Always start with fresh session storage for a new login attempt
+	h.storage = &MemorySessionStorage{}
 
 	h.clientCtx, h.cancelFunc = context.WithCancel(context.Background())
 	h.client = telegram.NewClient(apiID, apiHash, telegram.Options{
@@ -484,7 +487,7 @@ func (h *TelegramLoginHelper) StartLogin(phone string, apiID int, apiHash string
 	ctx, cancel := context.WithTimeout(h.clientCtx, 15*time.Second)
 	defer cancel()
 
-	res, err := h.client.Auth().SendCode(ctx, phone, auth.SendCodeOptions{})
+	res, err := h.client.Auth().SendCode(ctx, h.Phone, auth.SendCodeOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -498,29 +501,51 @@ func (h *TelegramLoginHelper) StartLogin(phone string, apiID int, apiHash string
 	return sentCode.PhoneCodeHash, nil
 }
 
-func (h *TelegramLoginHelper) VerifyCode(code string, password string) (string, error) {
+func (h *TelegramLoginHelper) VerifyCode(code string, password string) (sessionBase64 string, userName string, userEmail string, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.client == nil {
-		return "", fmt.Errorf("login session not initialized")
+		return "", "", "", fmt.Errorf("login session not initialized")
 	}
 
 	ctx, cancel := context.WithTimeout(h.clientCtx, 20*time.Second)
 	defer cancel()
 
+	code = strings.ReplaceAll(strings.TrimSpace(code), " ", "")
+	code = strings.ReplaceAll(code, "-", "")
+	password = strings.TrimSpace(password)
+
 	var signInErr error
+	var authRes tg.AuthAuthorizationClass
+
 	if password != "" {
-		_, signInErr = h.client.Auth().Password(ctx, password)
+		authRes, signInErr = h.client.Auth().Password(ctx, password)
 	} else {
-		_, signInErr = h.client.Auth().SignIn(ctx, h.Phone, code, h.authHash)
-		if errors.Is(signInErr, auth.ErrPasswordAuthNeeded) || strings.Contains(strings.ToLower(signInErr.Error()), "password") {
-			return "PASSWORD_REQUIRED", nil
+		authRes, signInErr = h.client.Auth().SignIn(ctx, h.Phone, code, h.authHash)
+		if errors.Is(signInErr, auth.ErrPasswordAuthNeeded) || (signInErr != nil && strings.Contains(strings.ToLower(signInErr.Error()), "password")) {
+			return "PASSWORD_REQUIRED", "", "", nil
 		}
 	}
 
 	if signInErr != nil {
-		return "", signInErr
+		return "", "", "", signInErr
+	}
+
+	uName := "Telegram User"
+	uEmail := h.Phone
+	if authRes != nil {
+		if authResult, ok := authRes.(*tg.AuthAuthorization); ok {
+			if u, ok := authResult.User.(*tg.User); ok {
+				fullName := strings.TrimSpace(u.FirstName + " " + u.LastName)
+				if fullName != "" {
+					uName = fullName
+				}
+				if u.Username != "" {
+					uEmail = "@" + u.Username
+				}
+			}
+		}
 	}
 
 	// Capture the session data bytes
@@ -529,16 +554,16 @@ func (h *TelegramLoginHelper) VerifyCode(code string, password string) (string, 
 	h.storage.mu.RUnlock()
 
 	if len(sessionBytes) == 0 {
-		return "", fmt.Errorf("failed to retrieve verified session data")
+		return "", "", "", fmt.Errorf("failed to retrieve verified session data")
 	}
 
-	sessionBase64 := base64.StdEncoding.EncodeToString(sessionBytes)
+	sessionBase64 = base64.StdEncoding.EncodeToString(sessionBytes)
 
-	// Clean up client
+	// Clean up login client
 	if h.cancelFunc != nil {
 		h.cancelFunc()
 		h.client = nil
 	}
 
-	return sessionBase64, nil
+	return sessionBase64, uName, uEmail, nil
 }

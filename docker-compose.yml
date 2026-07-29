@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  driverouter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: awd-driverouter
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_MODE=true
+      - PORT=8080
+      - HOST=0.0.0.0
+      # - API_KEY=your_secret_key_here  # Optional: Uncomment to protect server with API Key
+    volumes:
+      - driverouter_data:/root/.config/driverouter
+
+volumes:
+  driverouter_data:
+    driver: local

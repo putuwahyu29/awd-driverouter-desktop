@@ -26,6 +26,8 @@ type App struct {
 	webServer       *WebServer
 	quitting        bool
 	minimizeToTray  bool
+	isHeadless      bool
+	headlessPort    int
 	backupMu        gosync.Mutex
 	backupTicker    *time.Ticker
 	backupStop      chan struct{}

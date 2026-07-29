@@ -42,7 +42,8 @@ import {
   SetFileGeneralAccess,
   GetFileActivities,
   GetGeneralActivities,
-  CreateWebShare
+  CreateWebShare,
+  ToggleAccountActive
 } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -66,6 +67,8 @@ import {
   IconClose,
   IconRefresh,
   IconWarning,
+  IconEye,
+  IconEyeOff,
   IconGoogleDrive,
   IconOneDrive,
   IconDropbox,
@@ -194,6 +197,27 @@ function App() {
     toastTimeoutRef.current = setTimeout(() => {
       setToast({ message: '', visible: false });
     }, 3000);
+  };
+
+  // Account email visibility state (masked by default)
+  const [showEmails, setShowEmails] = useState<{ [accountId: string]: boolean }>({});
+  const toggleShowEmail = (accId: string) => {
+    setShowEmails(prev => ({ ...prev, [accId]: !prev[accId] }));
+  };
+
+  const maskEmail = (email: string) => {
+    if (!email) return '';
+    if (email.includes('@')) {
+      const [user, domain] = email.split('@');
+      if (user.length <= 2) {
+        return `${user[0] || '*'}***@${domain}`;
+      }
+      return `${user[0]}***${user[user.length - 1]}@${domain}`;
+    }
+    if (email.length > 5) {
+      return email.substring(0, 3) + '***' + email.substring(email.length - 2);
+    }
+    return '••••••••';
   };
 
   // Share Modal States
@@ -1197,7 +1221,12 @@ function App() {
 
   const handleOpenInCloud = async (file: FileRecord) => {
     try {
-      await OpenFileInBrowser(file.id);
+      const url = await GetFileWebURL(file.id);
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        await OpenFileInBrowser(file.id);
+      }
       fetchFiles(parentID);
     } catch (err) {
       showInfoDialog("Unsupported", "This provider does not support direct web links or the link could not be retrieved: " + err);
@@ -1367,6 +1396,16 @@ function App() {
       },
       { variant: 'danger', confirmLabel: t('disconnect') }
     );
+  };
+
+  const handleToggleAccountActive = async (id: string) => {
+    try {
+      await ToggleAccountActive(id);
+      fetchAccounts();
+      if (view === 'explorer') fetchFiles(parentID);
+    } catch (err: any) {
+      showInfoDialog("Error", "Failed to toggle account status: " + (err?.message || String(err)));
+    }
   };
 
   // Save Settings Strategy
@@ -2316,7 +2355,21 @@ function App() {
                               {acc.provider === 'webdav' && <IconCloud />}
                               <div>
                                 <h4 style={{ fontSize: '14px', fontWeight: '600' }}>{acc.displayName}</h4>
-                                <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>{acc.email}</span>
+                                {acc.email && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                                      {showEmails[acc.id] ? acc.email : maskEmail(acc.email)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleShowEmail(acc.id)}
+                                      title={showEmails[acc.id] ? (t('hideEmail') || "Sembunyikan Email") : (t('showEmail') || "Tampilkan Email")}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--md-sys-color-on-surface-variant)', opacity: 0.7, display: 'inline-flex', alignItems: 'center' }}
+                                    >
+                                      {showEmails[acc.id] ? <IconEyeOff /> : <IconEye />}
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div style={{ width: '150px', textAlign: 'right' }}>
@@ -3174,17 +3227,32 @@ function App() {
                                         {acc.provider.replace('_', ' ')}
                                       </span>
                                       {acc.email && (
-                                        <span style={{ fontSize: '11px', color: 'var(--md-sys-color-primary)', fontWeight: '500' }}>
-                                          {acc.email}
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ fontSize: '11px', color: 'var(--md-sys-color-primary)', fontWeight: '500' }}>
+                                            {showEmails[acc.id] ? acc.email : maskEmail(acc.email)}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleShowEmail(acc.id)}
+                                            title={showEmails[acc.id] ? (t('hideEmail') || "Sembunyikan Email") : (t('showEmail') || "Tampilkan Email")}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--md-sys-color-on-surface-variant)', opacity: 0.75, display: 'inline-flex', alignItems: 'center' }}
+                                          >
+                                            {showEmails[acc.id] ? <IconEyeOff /> : <IconEye />}
+                                          </button>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
                                 </div>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', padding: '4px 10px', borderRadius: '100px', backgroundColor: acc.active ? 'rgba(52, 168, 83, 0.15)' : 'rgba(128, 128, 128, 0.15)', color: acc.active ? '#34a853' : '#808080' }}>
-                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: acc.active ? '#34a853' : '#808080' }}></span>
-                                  {acc.active ? 'Active' : 'Inactive'}
-                                </span>
+                                <button
+                                   type="button"
+                                   onClick={() => handleToggleAccountActive(acc.id)}
+                                   title={acc.active ? t('clickToDeactivate') : t('clickToActivate')}
+                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', padding: '4px 10px', borderRadius: '100px', backgroundColor: acc.active ? 'rgba(52, 168, 83, 0.15)' : 'rgba(128, 128, 128, 0.15)', color: acc.active ? '#34a853' : '#808080', border: 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                 >
+                                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: acc.active ? '#34a853' : '#808080' }}></span>
+                                   {acc.active ? t('activeStatus') : t('inactiveStatus')}
+                                 </button>
                               </div>
 
                               {/* Progress bar and Space details */}
@@ -3926,13 +3994,13 @@ function App() {
               <>
                 {/* Create Web Share Option */}
                 <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openWebShareModal(contextMenu.file!); }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" style={{ marginRight: '8px' }}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                  <span style={{ color: 'var(--md-sys-color-primary)' }}>{t('createWebShare')}</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>{t('createWebShare')}</span>
                 </div>
                 {!contextMenu.file.isFolder && (
                 <>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); triggerFilePreview(contextMenu.file!); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '2px' }}><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                     <span>{t('preview')}</span>
                   </div>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); handleDownload(contextMenu.file!); }}>
@@ -3940,16 +4008,16 @@ function App() {
                     <span>{t('downloadFile')}</span>
                   </div>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openTransferModal(contextMenu.file!); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '2px' }}><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
                     <span>{t('copyToAnotherCloud')}</span>
                   </div>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); if (selectedIDs.length === 0 && contextMenu.file) setSelectedIDs([contextMenu.file.id]); setZipArchiveName('archive.zip'); setModal({ type: 'compress-zip' }); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '2px' }}><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 8h-2v2h2v-2zm0-4h-2v2h2v-2zm0-4h-2v2h2V6z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 8h-2v2h2v-2zm0-4h-2v2h2v-2zm0-4h-2v2h2V6z"/></svg>
                     <span>{t('compressToZip')}</span>
                   </div>
                   {contextMenu.file!.name.toLowerCase().endsWith('.zip') && (
                     <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); handleExtractZip(contextMenu.file!); }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '2px' }}><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                       <span>{t('extractHere')}</span>
                     </div>
                   )}
@@ -3968,7 +4036,7 @@ function App() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.8 2.04.8 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.3 2.04-.8l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
                       <span>{t('share')}</span>
                     </div>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '8px', color: 'var(--md-sys-color-on-surface-variant)' }}><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 'auto', color: 'var(--md-sys-color-on-surface-variant)' }}><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
                     <div className="submenu">
                       <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openShareModal(contextMenu.file!); }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 7c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4zm6 5H3v-.99c.2-.72 3.3-2.01 6-2.01s5.8 1.29 6 2v1zm-3-4.81c1.16-.85 2-2.04 2-3.44a5.955 5.955 0 0 0-2-4.44V3c2.76 0 5 2.24 5 5 0 1.95-1.11 3.63-2.73 4.46L12 11.19z"/></svg>
@@ -3981,7 +4049,7 @@ function App() {
                     </div>
                   </div>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); handleOpenInCloud(contextMenu.file!); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '2px' }}><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
                     <span>{t('openInDriveWeb')}</span>
                   </div>
                 </>

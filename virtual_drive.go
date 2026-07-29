@@ -430,7 +430,7 @@ func serveLoginPageHTML(w http.ResponseWriter, r *http.Request, errMsg string) {
 <div class="card">
   <button type="button" class="theme-toggle-top" id="themeBtnTop" onclick="toggleTheme()" title="Ganti Tema"></button>
   <div class="brand-logo">
-    <img src="/logo.png" alt="Awd DriveRouter Logo" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg width=40 height=40 viewBox=%220 0 32 32%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22><rect width=32 height=32 rx=8 fill=%22%233B82F6%22/><circle cx=16 cy=16 r=4 fill=%22white%22/></svg>'" />
+    <img src="/logo.png" alt="Awd DriveRouter Logo" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg width=40 height=40 viewBox=%%220 0 32 32%%22 fill=%%22none%%22 xmlns=%%22http://www.w3.org/2000/svg%%22><rect width=32 height=32 rx=8 fill=%%22%%233B82F6%%22/><circle cx=16 cy=16 r=4 fill=%%22white%%22/></svg>'" />
   </div>
   <h2>Awd DriveRouter Wi-Fi</h2>
   <p>Masukkan Password / PIN Akses Wi-Fi untuk membuka berkas cloud Anda pada perangkat HP atau Smart TV ini.</p>

@@ -26,6 +26,28 @@ func (a *App) DisconnectAccount(accountID string) error {
 	return a.database.DeleteAccount(accountID)
 }
 
+// ToggleAccountActive switches an account's active state (active <-> inactive).
+func (a *App) ToggleAccountActive(accountID string) (bool, error) {
+	acc, err := a.getAccount(accountID)
+	if err != nil {
+		return false, err
+	}
+	acc.Active = !acc.Active
+	if err := a.database.SaveAccount(acc); err != nil {
+		return false, err
+	}
+	if acc.Active {
+		// Attempt to sync if activated
+		go func() {
+			p, err := sync.FetchActiveProviderClient(a.database, acc, nil)
+			if err == nil {
+				_ = a.syncMgr.SyncAccount(acc, p)
+			}
+		}()
+	}
+	return acc.Active, nil
+}
+
 // GetSettings returns application settings.
 func (a *App) GetSettings() (map[string]string, error) {
 	strategy, err := a.database.GetSetting("upload_strategy")
@@ -669,7 +691,7 @@ func (a *App) SendTelegramCode(phone string) (string, error) {
 
 // VerifyTelegramCode completes the Telegram MTProto login and registers the account.
 func (a *App) VerifyTelegramCode(code, password, displayName string) (*db.AccountRecord, error) {
-	sessionData, err := provider.GetLoginHelper().VerifyCode(code, password)
+	sessionData, userName, userEmail, err := provider.GetLoginHelper().VerifyCode(code, password)
 	if err != nil {
 		return nil, err
 	}
@@ -678,24 +700,21 @@ func (a *App) VerifyTelegramCode(code, password, displayName string) (*db.Accoun
 		return nil, fmt.Errorf("PASSWORD_REQUIRED")
 	}
 
-	helper := provider.GetLoginHelper()
-	phone := helper.Phone
-	apiID := helper.APIID
-	apiHash := helper.APIHash
-
-	// Create and save account record
-	p := provider.NewTelegramUserProvider(phone, sessionData, apiID, apiHash, nil)
-
-	name, email, err := p.GetUserInfo()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch user info: %w", err)
+	if userName == "" {
+		userName = "Telegram User"
 	}
+	if userEmail == "" {
+		userEmail = provider.GetLoginHelper().Phone
+	}
+
+	helper := provider.GetLoginHelper()
+	p := provider.NewTelegramUserProvider(helper.Phone, sessionData, helper.APIID, helper.APIHash, nil)
 
 	acc := db.AccountRecord{
 		ID:           uuid.New().String(),
 		Provider:     "telegram_user",
-		DisplayName:  displayName + " (" + name + ")",
-		Email:        email,
+		DisplayName:  displayName + " (" + userName + ")",
+		Email:        userEmail,
 		AccessToken:  sessionData,
 		RefreshToken: "telegram_user",
 		TokenExpiry:  time.Now().AddDate(100, 0, 0).Format(time.RFC3339),

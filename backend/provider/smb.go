@@ -86,8 +86,6 @@ func (s *SMBProvider) GetQuota() (used, total int64, err error) {
 
 	// Return 500 GB default storage display for LAN SMB Shares
 	return 0, 500 * 1024 * 1024 * 1024, nil
-
-	return 0, 500 * 1024 * 1024 * 1024, nil
 }
 
 func (s *SMBProvider) ListDirectory(physicalFolderID string) ([]FileMetadata, error) {

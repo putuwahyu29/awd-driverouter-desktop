@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+build
+driverouter.exe
+driverouter-server
+frontend/node_modules
+frontend/dist
+screenshot
+*.log

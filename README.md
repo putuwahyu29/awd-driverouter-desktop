@@ -237,24 +237,147 @@ wails build -clean -ldflags "-s -w"
 #### 3. Cross-Platform Compilation
 ```bash
 # Build for Windows
-wails build -platform windows/amd64
+---
 
-# Build for macOS (Darwin Universal/Intel/Apple Silicon)
-wails build -platform darwin/universal
+## 🌐 Application Execution Modes
 
-# Build for Linux
-wails build -platform linux/amd64
-```
+Awd DriveRouter supports flexible **Dual-Mode** execution:
 
-#### 4. Generating Installer / Setup Files
-*   **Windows Setup Installer (NSIS)**:
-    Requires [NSIS](https://nsis.sourceforge.io/) installed on your Windows path. Run:
-    ```bash
-    wails build -nsis
-    ```
-    This generates a single setup installer executable `build/bin/Awd-DriveRouter-amd64-installer.exe`.
+### 1️⃣ Desktop GUI Mode (Standard Users)
+- **Execution**: Double-click `Awd-DriveRouter.exe` (or run `wails dev`).
+- **Interface**: Native desktop application window.
+
+### 2️⃣ Headless Web Server Mode (Web Browser Compatible)
+- **Execution on Windows**:
+  ```powershell
+  .\driverouter.exe --server --port=8080 --api-key=your_secret_key
+  ```
+- **Local Web Browser Access**: Open browser (Chrome / Edge / Firefox) at `http://localhost:8080`.
+- **Access from Other Devices on Internal Wi-Fi/LAN**:
+  - The app automatically detects and prints your local LAN IP address on server startup (e.g., `http://192.168.1.50:8080`).
+  - To check your IP manually on Windows: open PowerShell and type `ipconfig` (check the *IPv4 Address* field).
+  - Other devices (phones/tablets/laptops) on the same Wi-Fi can directly access `http://<YOUR-LAN-IP>:8080`.
+- **Restrict Access to Local Host Only**:
+  Run with `--host=127.0.0.1` to prevent other LAN devices from reaching the server:
+  ```powershell
+  .\driverouter.exe --server --host=127.0.0.1 --port=8080
+  ```
+- **System Tray Integration**: Clicking *"Open Awd DriveRouter"* on the Windows System Tray icon will **automatically open your web browser at `http://localhost:8080`**.
 
 ---
+
+## 🖥️ VPS & Linux Server Deployment Guide
+
+To deploy Awd DriveRouter on a Linux VPS (Ubuntu / Debian / Cloud VM):
+
+### Step 1: Cross-Compile Linux Binary
+On your local PC (Windows), build a Linux binary using Go cross-compilation:
+```powershell
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o driverouter-server .
+```
+
+### Step 2: Upload & Set Permissions on VPS
+Upload `driverouter-server` to your VPS and grant execution permissions:
+```bash
+chmod +x driverouter-server
+```
+
+### Step 3: Run as a Systemd Background Service
+Create a systemd unit file at `/etc/systemd/system/driverouter.service`:
+
+```ini
+[Unit]
+Description=Awd DriveRouter Headless Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/driverouter
+ExecStart=/opt/driverouter/driverouter-server --server --port=8080 --api-key=your_secret_key
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable driverouter
+sudo systemctl start driverouter
+```
+
+---
+
+## 🐳 Docker & Docker Compose Deployment Guide
+
+For 1-command containerized deployment:
+
+```bash
+docker-compose up -d --build
+```
+Access the web dashboard via browser at `http://your-vps-ip:8080`.
+
+---
+
+## 🔒 Public Deployment Security Guide
+
+> [!CAUTION]
+> If you plan to expose Awd DriveRouter to the public internet, follow these critical security best practices:
+
+1. **Mandatory API Key Protection**:
+   Always specify `API_KEY` in environment variables or `--api-key` flag when running in server mode. Without an API Key, anyone with your IP address can access your connected cloud accounts.
+   ```yaml
+   environment:
+     - SERVER_MODE=true
+     - API_KEY=StrongRandomSecretKey123!
+   ```
+
+2. **Always Use HTTPS / TLS (Nginx or Caddy Reverse Proxy)**:
+   Never expose raw HTTP (`:8080`) directly to the public internet. Use a reverse proxy like **Nginx** or **Caddy** with free Let's Encrypt SSL certificates.
+
+   **Example Nginx Configuration (`/etc/nginx/sites-available/driverouter`)**:
+   ```nginx
+   server {
+       listen 80;
+       server_name drive.yourdomain.com;
+       return 311 https://$host$request_uri;
+   }
+
+   server {
+       listen 443 ssl http2;
+       server_name drive.yourdomain.com;
+
+       ssl_certificate /etc/letsencrypt/live/drive.yourdomain.com/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/drive.yourdomain.com/privkey.pem;
+
+       location / {
+           proxy_pass http://127.0.0.1:8080;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+3. **Firewall Rules**:
+   Restrict port `8080` using UFW/iptables so it only listens on `127.0.0.1` locally, forcing all public incoming traffic through HTTPS (port `443`):
+   ```bash
+   sudo ufw default deny incoming
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   sudo ufw allow 22/tcp
+   sudo ufw enable
+   ```
+
+---
+
 
 ## ⚙️ Troubleshooting & Logs
 

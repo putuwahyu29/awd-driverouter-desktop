@@ -130,6 +130,150 @@ Untuk menjalankan aplikasi yang sudah dikompilasi, cukup klik dua kali berkas `A
 
 ---
 
+---
+
+## 🌐 Mode Penggunaan Aplikasi
+
+Awd DriveRouter mendukung **Dual-Mode** fleksibel untuk memenuhi kebutuhan pengguna awam hingga advance:
+
+### 1️⃣ Mode Desktop GUI (Pengguna Awam)
+- **Cara Jalankan**: Cukup double-click `Awd-DriveRouter.exe` (atau jalankan `wails dev`).
+- **Tampilan**: Antarmuka window desktop native biasa.
+
+### 2️⃣ Mode Headless Web Server (Kompatibel Browser Web)
+- **Cara Jalankan di Windows**:
+  ```powershell
+  .\driverouter.exe --server --port=8080 --api-key=rahasia123
+  ```
+- **Akses Peramban Web Lokal**: Buka peramban (Chrome / Edge / Firefox) di `http://localhost:8080`.
+- **Akses dari Perangkat Lain di Jaringan Wi-Fi/LAN Internal**:
+  - Aplikasi secara otomatis mencetak alamat IP LAN lokal Anda saat server di-start (contoh: `http://192.168.1.50:8080`).
+  - Untuk melihat IP secara manual di Windows: buka PowerShell dan ketik `ipconfig` (lihat bagian *IPv4 Address*).
+  - Perangkat lain (HP/Laptop) di jaringan Wi-Fi lokal dapat langsung mengakses `http://<IP-LAN-ANDA>:8080`.
+- **Membatasi Hanya Untuk Komputer Ini Saja**:
+  Jalankan dengan `--host=127.0.0.1` agar server tidak bisa diakses dari Wi-Fi lokal:
+  ```powershell
+  .\driverouter.exe --server --host=127.0.0.1 --port=8080
+  ```
+- **Integrasi System Tray**: Saat berjalan dalam mode headless di Windows, mengeklik *"Buka Awd DriveRouter"* pada icon System Tray akan **otomatis membuka peramban web di `http://localhost:8080`**.
+
+---
+
+## 🖥️ Panduan Deployment di VPS / Linux Server
+
+Jika Anda menyewa VPS Linux (Ubuntu / Debian / CentOS / Cloud VM):
+
+### Langkah 1: Kompilasi Binary Linux
+Di PC lokal (Windows), buat binary Linux dengan fitur *Cross-Compilation*:
+```powershell
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o driverouter-server .
+```
+
+### Langkah 2: Upload & Jalankan di VPS
+Upload berkas `driverouter-server` dan folder `frontend/dist` (atau jalankan langsung dari source) ke VPS Anda.
+
+Berikan izin eksekusi:
+```bash
+chmod +x driverouter-server
+```
+
+### Langkah 3: Menjalankan Latar Belakang (Systemd Service)
+Agar aplikasi tetap aktif di VPS meskipun koneksi SSH ditutup, buat service Systemd di `/etc/systemd/system/driverouter.service`:
+
+```ini
+[Unit]
+Description=Awd DriveRouter Headless Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/driverouter
+ExecStart=/opt/driverouter/driverouter-server --server --port=8080 --api-key=rahasia123
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Aktifkan service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable driverouter
+sudo systemctl start driverouter
+```
+
+---
+
+## 🐳 Panduan Deployment Docker & Docker Compose
+
+Untuk pengoperasian paling praktis tanpa perlu mengatur environment manual:
+
+### Deployment 1-Klik:
+```bash
+docker-compose up -d --build
+```
+Akses antarmuka web melalui peramban di `http://ip-vps-anda:8080`.
+
+---
+
+## 🔒 Panduan Keamanan Deployment Publik
+
+> [!CAUTION]
+> Jika Anda hendak mempublikasikan Awd DriveRouter ke jaringan publik internet (VPS/Cloud), ikuti langkah pengamanan wajib berikut:
+
+1. **Wajib Mengaktifkan API Key**:
+   Jangan pernah menjalankan server di publik tanpa mengisi `API_KEY` atau flag `--api-key`. Tanpa API Key, siapa pun yang mengetahui IP server Anda dapat mengontrol akun cloud Anda.
+   ```yaml
+   environment:
+     - SERVER_MODE=true
+     - API_KEY=KataSandiAcakYangKuat123!
+   ```
+
+2. **Wajib Menggunakan HTTPS / TLS (Reverse Proxy Nginx / Caddy)**:
+   Jangan membuka port HTTP mentah (`:8080`) langsung ke publik. Gunakan Reverse Proxy seperti **Nginx** atau **Caddy** dengan sertifikat SSL gratis dari Let's Encrypt.
+
+   **Contoh Konfigurasi Nginx (`/etc/nginx/sites-available/driverouter`)**:
+   ```nginx
+   server {
+       listen 80;
+       server_name drive.domainanda.com;
+       return 311 https://$host$request_uri;
+   }
+
+   server {
+       listen 443 ssl http2;
+       server_name drive.domainanda.com;
+
+       ssl_certificate /etc/letsencrypt/live/drive.domainanda.com/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/drive.domainanda.com/privkey.pem;
+
+       location / {
+           proxy_pass http://127.0.0.1:8080;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+3. **Atur Firewall Server**:
+   Tutup port `8080` dari akses publik luar menggunakan UFW/iptables, sehingga aplikasi hanya diakses secara internal oleh Nginx melalui HTTPS (Port `443`):
+   ```bash
+   sudo ufw default deny incoming
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   sudo ufw allow 22/tcp
+   sudo ufw enable
+   ```
+
+---
+
 ## 🛠️ Panduan Pengembang
 
 ### Kompilasi Mode Pengembang
