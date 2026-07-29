@@ -25,7 +25,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println("Awd DriveRouter v1.1.0 (Dual-Mode: Desktop GUI & Headless Web Server)")
+		fmt.Println("Awd DriveRouter v1.1.1 (Dual-Mode: Desktop GUI & Headless Web Server)")
 		os.Exit(0)
 	}
 

@@ -1,5 +1,37 @@
 [
   {
+    "version": "1.1.1",
+    "date": "2026-07-29",
+    "title": {
+      "id": "Awd DriveRouter v1.1.1 - Backup Rekursif, Auto-Retry HTTP 429 & Mounted Drive Ingest",
+      "en": "Awd DriveRouter v1.1.1 - Recursive Backup, HTTP 429 Auto-Retry & Mounted Drive Ingest"
+    },
+    "changes": {
+      "id": [
+        "Penelusuran rekursif subfolder backup (filepath.WalkDir) dengan optimasi In-Memory Folder Cache untuk mereplikasi hirarki direktori secara otomatis ke cloud destination.",
+        "Penanganan error HTTP 429 (TooManyRequests) dengan mekanisme Exponential Backoff Retry (retryOn429) otomatis pada OneDrive, Google Drive, & provider lain.",
+        "Pencegahan unggahan file duplikat dengan pengecekan database virtual sebelum pengunggahan berkas backup.",
+        "Penanganan izin akses (Access Denied) dengan melompati berkas tersembunyi OS & berkas sistem terkunci (desktop.ini, thumbs.db, ~$*, .DS_Store, ntuser.dat) tanpa menggagalkan tugas backup.",
+        "Tombol Cek & Sinkronkan Sekarang (Refresh) di setiap kartu tugas backup untuk pemicuan sinkronisasi instan per folder.",
+        "Dukungan penulisan pada Mounted Virtual Drive (Z:\\) yang secara otomatis memindai, mendaftarkan, dan mengunggah folder/file baru buatan Windows Explorer ke cloud storage.",
+        "Resolusi konflik Drive Letter (findFirstAvailableDriveLetter) yang otomatis memilih letter kosong (Y:, X:, W:, dll.) jika letter Z: sedang terpakai.",
+        "Auto-mount Virtual Drive diaktifkan secara bawaan begitu aplikasi dijalankan.",
+        "Penggantian seluruh dialog native JavaScript (confirm/alert) dengan Modal Confirm UI Custom yang responsif dan sesuai tema."
+      ],
+      "en": [
+        "Recursive subfolder backup scanning (filepath.WalkDir) with In-Memory Folder Cache optimization to replicate directory trees to cloud destinations.",
+        "Automatic exponential backoff retries (retryOn429) for OneDrive, Google Drive, & cloud providers to resolve HTTP 429 rate limit throttling (TooManyRequests).",
+        "Duplicate file upload prevention by checking existing virtual cloud database records before uploading backup files.",
+        "Access Denied / System File Filter to skip hidden OS files & locked system files (desktop.ini, thumbs.db, ~$*, .DS_Store, ntuser.dat) without interrupting backup runs.",
+        "Manual Check & Sync Now (Refresh) button on each backup task card for instant per-folder synchronization.",
+        "Mounted Virtual Drive (Z:\\) write ingestion to automatically detect, save, and upload new files or folders created via Windows Explorer.",
+        "Drive Letter conflict resolution (findFirstAvailableDriveLetter) that falls back to available free letters (Y:, X:, W:, etc.) if Z: is occupied.",
+        "Automatic startup Virtual Drive mounting enabled by default whenever the application opens.",
+        "Replaced all native browser confirm and alert dialogs with responsive custom UI modals."
+      ]
+    }
+  },
+  {
     "version": "1.1.0",
     "date": "2026-07-29",
     "title": {
