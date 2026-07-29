@@ -30,6 +30,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o driverout
 # Stage 3: Minimal Runtime Container
 FROM alpine:latest
 
+LABEL org.opencontainers.image.title="Awd DriveRouter Server"
+LABEL org.opencontainers.image.description="Awd DriveRouter Headless Server - High-performance multi-cloud storage routing layer"
+LABEL org.opencontainers.image.source="https://github.com/putuwahyu29/awd-driverouter-desktop"
+LABEL org.opencontainers.image.licenses="MIT"
+
 RUN apk add --no-cache ca-certificates tzdata fuse
 
 WORKDIR /app
