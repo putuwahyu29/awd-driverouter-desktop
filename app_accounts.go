@@ -265,8 +265,21 @@ func (a *App) StartOAuthFlow(providerName string) (*db.AccountRecord, error) {
 		log.Printf("Warning: failed to retrieve drive quota: %v", err)
 	}
 
+	// Check if an existing account with the same provider and email/name already exists in DB
+	accID := uuid.New().String()
+	existingAccounts, errDb := a.database.GetAccounts()
+	if errDb == nil {
+		for _, existing := range existingAccounts {
+			if existing.Provider == providerName && (strings.EqualFold(existing.Email, email) || (email == "" && strings.EqualFold(existing.DisplayName, name))) {
+				accID = existing.ID
+				log.Printf("Re-authenticating existing account %s (%s, ID: %s)", name, email, accID)
+				break
+			}
+		}
+	}
+
 	acc := db.AccountRecord{
-		ID:           uuid.New().String(),
+		ID:           accID,
 		Provider:     providerName,
 		DisplayName:  name,
 		Email:        email,
@@ -286,7 +299,7 @@ func (a *App) StartOAuthFlow(providerName string) (*db.AccountRecord, error) {
 	// Cache the initial token in-memory
 	sync.CacheToken(acc.ID, tok)
 
-	// Trigger sync in background for this new account
+	// Trigger sync in background for this account
 	go func() {
 		_ = a.syncMgr.SyncAccount(acc, p)
 	}()

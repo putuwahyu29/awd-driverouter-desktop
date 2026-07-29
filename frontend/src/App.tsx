@@ -3275,6 +3275,11 @@ function App() {
 
                             {/* Actions block */}
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: '12px' }}>
+                              {!acc.active && ['google', 'onedrive', 'dropbox', 'box', 'yandex', 'pcloud'].includes(acc.provider) && (
+                                <button className="btn btn-text" style={{ fontSize: '12px', color: 'var(--md-sys-color-primary)', fontWeight: '600' }} onClick={() => handleLinkAccount(acc.provider)}>
+                                  {t('reauthenticate') || "Sambungkan Ulang"}
+                                </button>
+                              )}
                               {acc.provider !== 'webdav' && acc.provider !== 's3' && acc.provider !== 'telegram' && acc.provider !== 'telegram_user' && (
                                 <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => openCredentialsModal(acc.provider)}>{t('apiKeys')}</button>
                               )}

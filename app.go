@@ -169,7 +169,7 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-const AppVersion = "1.0.1"
+const AppVersion = "1.1.0"
 
 type VersionCheckResult struct {
 	HasUpdate     bool   `json:"has_update"`

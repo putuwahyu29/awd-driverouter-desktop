@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.1.0",
+    "date": "2026-07-29",
+    "title": {
+      "id": "Awd DriveRouter v1.1.0 - Headless Server, Cloudflare Web Sharing & Perbaikan Akun",
+      "en": "Awd DriveRouter v1.1.0 - Headless Server, Cloudflare Web Sharing & Account Fixes"
+    },
+    "changes": {
+      "id": [
+        "Dukungan Mode Headless Web Server (CLI flag --server, --port, --host, --api-key & Docker/Docker Compose) untuk penggunaan tanpa antarmuka GUI.",
+        "Fitur Internal Web Sharing dengan integrasi Cloudflare Tunnel otomatis untuk membagikan file & folder publik maupun privat.",
+        "Tampilan Web Public Sharing modern lengkap dengan proteksi kata sandi, batas waktu kedaluwarsa, batas jumlah unduhan, dan pratinjau media.",
+        "Fitur Sambungkan Ulang (Re-authenticate) untuk akun cloud (Google Drive, OneDrive, Dropbox, Box, Yandex, pCloud) agar pembaruan token tidak menduplikasi akun di database.",
+        "Perbaikan penanganan token OAuth yang kedaluwarsa secara otomatis saat sinkronisasi di latar belakang.",
+        "Integrasi WebSocket real-time untuk pemantauan progres transfer pengunggahan dan status sinkronisasi akun secara otomatis."
+      ],
+      "en": [
+        "Headless Web Server mode support (CLI flags --server, --port, --host, --api-key & Docker/Docker Compose) for server and GUI-less environments.",
+        "Internal Web Sharing feature with automatic Cloudflare Tunnel integration to share files & folders publicly or privately.",
+        "Modern Public Web Sharing interface equipped with password protection, expiration timers, download limits, and media previews.",
+        "Re-authentication feature for cloud accounts (Google Drive, OneDrive, Dropbox, Box, Yandex, pCloud) to refresh expired tokens without duplicating accounts.",
+        "Fixed expired OAuth refresh token handling during automatic background synchronization.",
+        "Real-time WebSocket integration for live upload transfer progress and account sync status updates."
+      ]
+    }
+  },
+  {
     "version": "1.0.1",
     "date": "2026-07-22",
     "title": {
