@@ -41,7 +41,8 @@ import {
   DeleteFilePermission,
   SetFileGeneralAccess,
   GetFileActivities,
-  GetGeneralActivities
+  GetGeneralActivities,
+  CreateWebShare
 } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -85,13 +86,14 @@ import {
 } from './components/Icons';
 import AboutView from './components/AboutView';
 import VirtualDriveView from './components/VirtualDriveView';
+import WebShareManagement from './components/WebShareManagement';
 import { PROVIDER_GUIDES } from './providerGuides';
 
 // @ts-ignore
 import { CheckForUpdates, OpenReleaseURL } from '../wailsjs/go/main/App';
 
 function App() {
-  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash' | 'about' | 'rclone'>('home');
+  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash' | 'about' | 'rclone' | 'webshare'>('home');
   const [storageTab, setStorageTab] = useState<'overview' | 'allocation' | 'duplicates'>('overview');
   const [settingsTab, setSettingsTab] = useState<'general' | 'vdisk' | 'backup' | 'api'>('general');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -145,6 +147,33 @@ function App() {
 
   // Recents filter state
   const [recentAccountFilter, setRecentAccountFilter] = useState<string>('all');
+
+  // Web Share modal state
+  const [createShareFile, setCreateShareFile] = useState<FileRecord | null>(null);
+  const [sharePassword, setSharePassword] = useState<string>('');
+  const [creatingShare, setCreatingShare] = useState<boolean>(false);
+
+  const openWebShareModal = (file: FileRecord) => {
+    setCreateShareFile(file);
+    setSharePassword('');
+  };
+
+  const handleCreateWebShareSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createShareFile) return;
+    setCreatingShare(true);
+    try {
+      await CreateWebShare(createShareFile.id, sharePassword);
+      showToast(lang === 'id' ? 'Web share link berhasil dibuat!' : 'Web share link created successfully!');
+      setCreateShareFile(null);
+      setSharePassword('');
+      setView('webshare');
+    } catch (err) {
+      showInfoDialog("Error", "Failed to create web share link: " + err);
+    } finally {
+      setCreatingShare(false);
+    }
+  };
 
   // Local Settings Options
   const [lang, setLang] = useState<'en' | 'id'>('en');
@@ -1949,6 +1978,10 @@ function App() {
           <div className={`nav-item ${view === 'starred' ? 'active' : ''}`} onClick={() => setView('starred')} title={sidebarCollapsed ? t('starred') : undefined}>
             <IconStar />
             {!sidebarCollapsed && <span>{t('starred')}</span>}
+          </div>
+          <div className={`nav-item ${view === 'webshare' ? 'active' : ''}`} onClick={() => setView('webshare')} title={sidebarCollapsed ? t('webSharing') : undefined}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            {!sidebarCollapsed && <span>{t('webSharing')}</span>}
           </div>
           <div className={`nav-item ${view === 'trash' ? 'active' : ''}`} onClick={() => setView('trash')} title={sidebarCollapsed ? t('trash') : undefined}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
@@ -3855,6 +3888,15 @@ function App() {
           </div>
         )}
 
+        {/* Web Share Management tab */}
+        {view === 'webshare' && (
+          <div className="explorer-body">
+            <div className="content-scroll" style={{ width: '100%', paddingBottom: '40px' }}>
+              <WebShareManagement lang={lang} addToast={(msg) => showToast(msg)} />
+            </div>
+          </div>
+        )}
+
         {/* About App tab */}
         {view === 'about' && (
           <div className="explorer-body">
@@ -3882,6 +3924,11 @@ function App() {
               </>
             ) : (
               <>
+                {/* Create Web Share Option */}
+                <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openWebShareModal(contextMenu.file!); }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" style={{ marginRight: '8px' }}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span style={{ color: 'var(--md-sys-color-primary)' }}>{t('createWebShare')}</span>
+                </div>
                 {!contextMenu.file.isFolder && (
                 <>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); triggerFilePreview(contextMenu.file!); }}>
@@ -5713,6 +5760,82 @@ function App() {
                 {lang === 'id' ? 'Perbarui Sekarang' : 'Update Now'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Web Share Modal */}
+      {createShareFile && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000
+        }}>
+          <div style={{
+            backgroundColor: 'var(--md-sys-color-surface-container-high, #1e293b)',
+            border: '1px solid var(--md-sys-color-outline-variant, rgba(255,255,255,0.1))',
+            borderRadius: '24px', padding: '28px', width: '100%', maxWidth: '420px',
+            boxShadow: 'var(--shadow-3, 0 16px 48px rgba(0,0,0,0.5))', color: 'var(--md-sys-color-on-surface, #fff)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(56,189,248,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8'
+              }}>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                  {lang === 'id' ? 'Berbagi Web (Lokal/Public)' : 'Create Web Share'}
+                </h3>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant, #94a3b8)' }}>
+                  {createShareFile.name}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateWebShareSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '6px', color: 'var(--md-sys-color-on-surface-variant, #94a3b8)' }}>
+                  {lang === 'id' ? 'Password Proteksi (Opsional)' : 'Protection Password (Optional)'}
+                </label>
+                <input
+                  type="password"
+                  value={sharePassword}
+                  onChange={e => setSharePassword(e.target.value)}
+                  placeholder={lang === 'id' ? 'Kosongkan jika tanpa password' : 'Leave empty for no password'}
+                  style={{
+                    width: '100%', padding: '12px 16px', borderRadius: '12px',
+                    border: '1px solid var(--md-sys-color-outline-variant, rgba(255,255,255,0.15))',
+                    backgroundColor: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '14px',
+                    boxSizing: 'border-box', outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCreateShareFile(null)}
+                  style={{
+                    padding: '10px 20px', borderRadius: '100px', border: '1px solid var(--md-sys-color-outline-variant, rgba(255,255,255,0.2))',
+                    backgroundColor: 'transparent', color: '#fff', fontSize: '13px', cursor: 'pointer'
+                  }}
+                >
+                  {lang === 'id' ? 'Batal' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingShare}
+                  style={{
+                    padding: '10px 24px', borderRadius: '100px', border: 'none',
+                    backgroundColor: '#38bdf8', color: '#0f172a', fontSize: '13px', fontWeight: '700', cursor: 'pointer'
+                  }}
+                >
+                  {creatingShare ? (lang === 'id' ? 'Membuat...' : 'Creating...') : (lang === 'id' ? 'Buat Link' : 'Create Link')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

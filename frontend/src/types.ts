@@ -60,3 +60,16 @@ export type AppDialog =
       cancelLabel?: string;
       onConfirm: (value: string) => void | Promise<void>;
     };
+
+export interface WebShareItem {
+  id: string;
+  name: string;
+  type: string;
+  virtualId: string;
+  size: number;
+  mimeType: string;
+  date: number;
+  password?: string;
+  accessCount: number;
+}
+

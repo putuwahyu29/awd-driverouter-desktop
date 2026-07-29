@@ -23,6 +23,7 @@ type App struct {
 	syncMgr         *sync.SyncManager
 	uploadHub       *transferHub
 	virtualDriveMgr *NativeVirtualDriveManager
+	webServer       *WebServer
 	quitting        bool
 	minimizeToTray  bool
 	backupMu        gosync.Mutex
@@ -43,6 +44,10 @@ func (a *App) startup(ctx context.Context) {
 	a.database = database
 	a.syncMgr = sync.NewSyncManager(database)
 	a.virtualDriveMgr = NewNativeVirtualDriveManager(a)
+	a.webServer = NewWebServer(a)
+	if err := a.webServer.Start(); err != nil {
+		log.Printf("Failed to start WebServer: %v", err)
+	}
 
 	// Load tray setting
 	minToTrayStr, err := database.GetSetting("minimize_to_tray")
@@ -100,6 +105,9 @@ func (a *App) shutdown(ctx context.Context) {
 		a.virtualDriveMgr.mu.Unlock()
 	}
 
+	if a.webServer != nil {
+		a.webServer.Stop()
+	}
 	a.StopBackupService()
 	a.stopUploadWebSocketServer()
 	if a.database != nil {
@@ -245,4 +253,149 @@ func (a *App) GetWSAuthToken() string {
 	}
 	return a.uploadHub.authToken
 }
+
+// GetWebShares returns all active web share items.
+func (a *App) GetWebShares() ([]WebShareItem, error) {
+	if a.webServer == nil {
+		return []WebShareItem{}, nil
+	}
+	a.webServer.Mu.Lock()
+	defer a.webServer.Mu.Unlock()
+	return a.webServer.SharedItems, nil
+}
+
+// CreateWebShare creates a new internal web share link for a file or folder.
+func (a *App) CreateWebShare(virtualID string, password string) (WebShareItem, error) {
+	if a.webServer == nil {
+		return WebShareItem{}, fmt.Errorf("web server is not active")
+	}
+
+	f, err := a.database.GetFile(virtualID)
+	if err != nil {
+		return WebShareItem{}, fmt.Errorf("file not found: %w", err)
+	}
+
+	itemType := "file"
+	if f.IsFolder {
+		itemType = "folder"
+	}
+
+	item := WebShareItem{
+		ID:          a.webServer.generateID(),
+		Name:        f.Name,
+		Type:        itemType,
+		VirtualID:   f.ID,
+		Size:        f.Size,
+		Date:        time.Now().Unix(),
+		Password:    password,
+		AccessCount: 0,
+	}
+
+	a.webServer.Mu.Lock()
+	a.webServer.SharedItems = append(a.webServer.SharedItems, item)
+	a.webServer.Mu.Unlock()
+
+	a.webServer.SaveShares()
+	return item, nil
+}
+
+// DeleteWebShare removes a web share link by ID.
+func (a *App) DeleteWebShare(shareID string) (bool, error) {
+	if a.webServer == nil {
+		return false, fmt.Errorf("web server is not active")
+	}
+
+	a.webServer.Mu.Lock()
+	newItems := make([]WebShareItem, 0, len(a.webServer.SharedItems))
+	found := false
+	for _, item := range a.webServer.SharedItems {
+		if item.ID == shareID {
+			found = true
+			continue
+		}
+		newItems = append(newItems, item)
+	}
+	a.webServer.SharedItems = newItems
+	a.webServer.Mu.Unlock()
+
+	if found {
+		a.webServer.SaveShares()
+	}
+	return found, nil
+}
+
+// UpdateWebSharePassword updates the password protection of a web share.
+func (a *App) UpdateWebSharePassword(shareID string, password string) error {
+	if a.webServer == nil {
+		return fmt.Errorf("web server is not active")
+	}
+
+	a.webServer.Mu.Lock()
+	found := false
+	for i := range a.webServer.SharedItems {
+		if a.webServer.SharedItems[i].ID == shareID {
+			a.webServer.SharedItems[i].Password = password
+			found = true
+			break
+		}
+	}
+	a.webServer.Mu.Unlock()
+
+	if !found {
+		return fmt.Errorf("share item not found")
+	}
+	a.webServer.SaveShares()
+	return nil
+}
+
+// TogglePublicTunnel starts or stops the Cloudflare public tunnel.
+func (a *App) TogglePublicTunnel(enable bool) (string, error) {
+	if a.webServer == nil {
+		return "", fmt.Errorf("web server is not active")
+	}
+
+	if enable {
+		return a.webServer.StartTunnel()
+	} else {
+		a.webServer.StopTunnel()
+		return "", nil
+	}
+}
+
+// GetTunnelPublicUrl returns the current public URL of the tunnel if running.
+func (a *App) GetTunnelPublicUrl() string {
+	if a.webServer == nil {
+		return ""
+	}
+	a.webServer.Mu.Lock()
+	defer a.webServer.Mu.Unlock()
+	return a.webServer.PublicUrl
+}
+
+// IsTunnelRunning checks if the Cloudflare tunnel is active.
+func (a *App) IsTunnelRunning() bool {
+	if a.webServer == nil {
+		return false
+	}
+	a.webServer.Mu.Lock()
+	defer a.webServer.Mu.Unlock()
+	return a.webServer.Tunneling
+}
+
+// GetLocalIPAddress returns the primary local network IP address.
+func (a *App) GetLocalIPAddress() string {
+	if a.webServer == nil {
+		return "127.0.0.1"
+	}
+	return a.webServer.GetLocalIP()
+}
+
+// GetWebServerPort returns the HTTP server port.
+func (a *App) GetWebServerPort() int {
+	if a.webServer == nil {
+		return 0
+	}
+	return a.webServer.Port
+}
+
 

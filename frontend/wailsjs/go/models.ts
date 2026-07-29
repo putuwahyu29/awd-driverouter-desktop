@@ -222,6 +222,34 @@ export namespace main {
 	        this.autoMountLetter = source["autoMountLetter"];
 	    }
 	}
+	export class WebShareItem {
+	    id: string;
+	    name: string;
+	    type: string;
+	    virtualId: string;
+	    size: number;
+	    mimeType: string;
+	    date: number;
+	    password: string;
+	    accessCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WebShareItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.virtualId = source["virtualId"];
+	        this.size = source["size"];
+	        this.mimeType = source["mimeType"];
+	        this.date = source["date"];
+	        this.password = source["password"];
+	        this.accessCount = source["accessCount"];
+	    }
+	}
 
 }
 

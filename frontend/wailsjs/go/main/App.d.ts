@@ -38,9 +38,13 @@ export function CopyFileToAccount(arg1:string,arg2:string,arg3:string):Promise<v
 
 export function CreateFolder(arg1:string,arg2:string):Promise<string>;
 
+export function CreateWebShare(arg1:string,arg2:string):Promise<main.WebShareItem>;
+
 export function DeleteFile(arg1:string):Promise<void>;
 
 export function DeleteFilePermission(arg1:string,arg2:string):Promise<void>;
+
+export function DeleteWebShare(arg1:string):Promise<boolean>;
 
 export function DisconnectAccount(arg1:string):Promise<void>;
 
@@ -68,6 +72,8 @@ export function GetFiles(arg1:string,arg2:boolean,arg3:string):Promise<Array<db.
 
 export function GetGeneralActivities(arg1:number):Promise<Array<db.ActivityRecord>>;
 
+export function GetLocalIPAddress():Promise<string>;
+
 export function GetMountedVirtualDrives():Promise<Array<main.MountedDriveInfo>>;
 
 export function GetRecentFiles():Promise<Array<db.FileRecord>>;
@@ -78,13 +84,21 @@ export function GetSyncTasks():Promise<Array<db.SyncTask>>;
 
 export function GetTrashedFiles():Promise<Array<db.FileRecord>>;
 
+export function GetTunnelPublicUrl():Promise<string>;
+
 export function GetVirtualDriveStatus():Promise<main.VirtualDriveStatus>;
 
 export function GetVirtualFolders():Promise<Array<db.FileRecord>>;
 
 export function GetWSAuthToken():Promise<string>;
 
+export function GetWebServerPort():Promise<number>;
+
+export function GetWebShares():Promise<Array<main.WebShareItem>>;
+
 export function IsStartupEnabled():Promise<boolean>;
+
+export function IsTunnelRunning():Promise<boolean>;
 
 export function MountVirtualDrive(arg1:string,arg2:string):Promise<main.MountedDriveInfo>;
 
@@ -136,6 +150,8 @@ export function StopNativeWebDAVServer():Promise<void>;
 
 export function SyncDrives():Promise<void>;
 
+export function TogglePublicTunnel(arg1:boolean):Promise<string>;
+
 export function ToggleStarred(arg1:string,arg2:boolean):Promise<void>;
 
 export function ToggleSyncTask(arg1:string,arg2:boolean):Promise<void>;
@@ -145,6 +161,8 @@ export function UnmountVirtualDrive(arg1:string):Promise<void>;
 export function UpdateBackupInterval(arg1:number):Promise<void>;
 
 export function UpdateSyncTask(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UpdateWebSharePassword(arg1:string,arg2:string):Promise<void>;
 
 export function UploadFileDialog(arg1:string,arg2:string):Promise<void>;
 

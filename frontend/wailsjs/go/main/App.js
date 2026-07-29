@@ -70,12 +70,20 @@ export function CreateFolder(arg1, arg2) {
   return window['go']['main']['App']['CreateFolder'](arg1, arg2);
 }
 
+export function CreateWebShare(arg1, arg2) {
+  return window['go']['main']['App']['CreateWebShare'](arg1, arg2);
+}
+
 export function DeleteFile(arg1) {
   return window['go']['main']['App']['DeleteFile'](arg1);
 }
 
 export function DeleteFilePermission(arg1, arg2) {
   return window['go']['main']['App']['DeleteFilePermission'](arg1, arg2);
+}
+
+export function DeleteWebShare(arg1) {
+  return window['go']['main']['App']['DeleteWebShare'](arg1);
 }
 
 export function DisconnectAccount(arg1) {
@@ -130,6 +138,10 @@ export function GetGeneralActivities(arg1) {
   return window['go']['main']['App']['GetGeneralActivities'](arg1);
 }
 
+export function GetLocalIPAddress() {
+  return window['go']['main']['App']['GetLocalIPAddress']();
+}
+
 export function GetMountedVirtualDrives() {
   return window['go']['main']['App']['GetMountedVirtualDrives']();
 }
@@ -150,6 +162,10 @@ export function GetTrashedFiles() {
   return window['go']['main']['App']['GetTrashedFiles']();
 }
 
+export function GetTunnelPublicUrl() {
+  return window['go']['main']['App']['GetTunnelPublicUrl']();
+}
+
 export function GetVirtualDriveStatus() {
   return window['go']['main']['App']['GetVirtualDriveStatus']();
 }
@@ -162,8 +178,20 @@ export function GetWSAuthToken() {
   return window['go']['main']['App']['GetWSAuthToken']();
 }
 
+export function GetWebServerPort() {
+  return window['go']['main']['App']['GetWebServerPort']();
+}
+
+export function GetWebShares() {
+  return window['go']['main']['App']['GetWebShares']();
+}
+
 export function IsStartupEnabled() {
   return window['go']['main']['App']['IsStartupEnabled']();
+}
+
+export function IsTunnelRunning() {
+  return window['go']['main']['App']['IsTunnelRunning']();
 }
 
 export function MountVirtualDrive(arg1, arg2) {
@@ -266,6 +294,10 @@ export function SyncDrives() {
   return window['go']['main']['App']['SyncDrives']();
 }
 
+export function TogglePublicTunnel(arg1) {
+  return window['go']['main']['App']['TogglePublicTunnel'](arg1);
+}
+
 export function ToggleStarred(arg1, arg2) {
   return window['go']['main']['App']['ToggleStarred'](arg1, arg2);
 }
@@ -284,6 +316,10 @@ export function UpdateBackupInterval(arg1) {
 
 export function UpdateSyncTask(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateSyncTask'](arg1, arg2, arg3, arg4);
+}
+
+export function UpdateWebSharePassword(arg1, arg2) {
+  return window['go']['main']['App']['UpdateWebSharePassword'](arg1, arg2);
 }
 
 export function UploadFileDialog(arg1, arg2) {
