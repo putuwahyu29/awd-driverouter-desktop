@@ -100,11 +100,80 @@ func (mgr *NativeVirtualDriveManager) getCombinedQuota(accountID string) (used i
 	return used, total
 }
 
+func (mgr *NativeVirtualDriveManager) resolveVirtualDirID(relDir string) string {
+	if relDir == "" || relDir == "." || relDir == "/" {
+		return "root"
+	}
+	parts := strings.Split(filepath.ToSlash(relDir), "/")
+	currentParent := "root"
+	for _, part := range parts {
+		if part == "" || part == "." {
+			continue
+		}
+		existing, err := mgr.app.database.GetFileByNameAndParent(part, currentParent)
+		if err == nil && existing.IsFolder {
+			currentParent = existing.ID
+		} else {
+			newID, err := mgr.app.CreateFolder(currentParent, part)
+			if err == nil {
+				currentParent = newID
+			} else {
+				return currentParent
+			}
+		}
+	}
+	return currentParent
+}
+
+func (mgr *NativeVirtualDriveManager) syncMountedDriveChanges() {
+	if mgr.app == nil || mgr.app.database == nil {
+		return
+	}
+	_ = filepath.WalkDir(mgr.vdiskDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || path == mgr.vdiskDir {
+			return nil
+		}
+		relPath, err := filepath.Rel(mgr.vdiskDir, path)
+		if err != nil || relPath == "" || relPath == "." {
+			return nil
+		}
+		name := d.Name()
+		if isSystemOrIgnoredFile(name) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		relDir := filepath.Dir(relPath)
+		parentVirtualID := mgr.resolveVirtualDirID(relDir)
+
+		existing, err := mgr.app.database.GetFileByNameAndParent(name, parentVirtualID)
+		if err != nil || existing.ID == "" {
+			if d.IsDir() {
+				log.Printf("Mounted Drive: Auto-ingesting new folder '%s'", name)
+				_, _ = mgr.app.CreateFolder(parentVirtualID, name)
+			} else {
+				info, err := d.Info()
+				if err == nil && info.Size() > 0 {
+					log.Printf("Mounted Drive: Auto-ingesting new file '%s'", name)
+					uploadID := fmt.Sprintf("vdrive-up-%d", time.Now().UnixNano())
+					_ = mgr.app.uploadFileFromPath(parentVirtualID, path, "", uploadID)
+				}
+			}
+		}
+		return nil
+	})
+}
+
 // syncVirtualDriveRoot maps database records into vdiskDir filesystem so WebDAV shows real DriveRouter files.
 func (mgr *NativeVirtualDriveManager) syncVirtualDriveRoot(accountID string) {
 	if mgr.app == nil || mgr.app.database == nil {
 		return
 	}
+
+	// First ingest any new local files or folders added by user via Windows Explorer into Mount Drive
+	mgr.syncMountedDriveChanges()
 
 	files, err := mgr.app.database.GetFiles("root", false, "")
 	if err != nil {
@@ -884,11 +953,51 @@ func (a *App) StopNativeWebDAVServer() error {
 	return nil
 }
 
+func isDriveLetterFree(letter string) bool {
+	clean := strings.TrimSuffix(letter, "\\") + "\\"
+	_, err := os.Stat(clean)
+	return os.IsNotExist(err)
+}
+
+func (a *App) findFirstAvailableDriveLetter(requestedLetter string) string {
+	if runtime.GOOS != "windows" {
+		return requestedLetter
+	}
+	drives := []string{"Z:", "Y:", "X:", "W:", "V:", "U:", "T:", "S:", "R:", "P:", "O:", "N:", "M:", "L:", "K:", "J:", "I:", "H:", "G:", "F:", "E:", "D:"}
+
+	cleanReq := strings.ToUpper(strings.TrimSuffix(requestedLetter, "\\"))
+	if !strings.HasSuffix(cleanReq, ":") {
+		cleanReq += ":"
+	}
+
+	if a.virtualDriveMgr != nil {
+		a.virtualDriveMgr.mu.Lock()
+		_, isOurMount := a.virtualDriveMgr.mounts[cleanReq]
+		a.virtualDriveMgr.mu.Unlock()
+		if isOurMount {
+			return cleanReq
+		}
+	}
+
+	if isDriveLetterFree(cleanReq) {
+		return cleanReq
+	}
+
+	for _, d := range drives {
+		if isDriveLetterFree(d) {
+			log.Printf("Drive letter conflict: requested %s is occupied. Automatically using %s instead.", cleanReq, d)
+			return d
+		}
+	}
+	return cleanReq
+}
+
 // MountVirtualDrive maps Drive letter (Windows) or Volumes (macOS/Linux) with informative naming.
 func (a *App) MountVirtualDrive(accountID string, driveLetter string) (MountedDriveInfo, error) {
 	if driveLetter == "" {
 		driveLetter = "Z:"
 	}
+	driveLetter = a.findFirstAvailableDriveLetter(driveLetter)
 	if !strings.HasSuffix(driveLetter, ":") && runtime.GOOS == "windows" {
 		driveLetter += ":"
 	}

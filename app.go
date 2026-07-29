@@ -83,9 +83,9 @@ func (a *App) startup(ctx context.Context) {
 		time.Sleep(2 * time.Second)
 		_ = a.syncMgr.SyncAllDrives()
 
-		// Auto-mount Virtual Drive on startup if enabled in settings
+		// Auto-mount Virtual Drive on startup (default to true unless explicitly disabled)
 		autoMountStr, err := database.GetSetting("auto_mount_drive")
-		if err == nil && autoMountStr == "true" {
+		if err != nil || autoMountStr != "false" {
 			autoLetter, _ := database.GetSetting("auto_mount_letter")
 			if autoLetter == "" {
 				autoLetter = "Z:"

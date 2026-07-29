@@ -775,6 +775,22 @@ func (db *DB) GetSyncTasks() ([]SyncTask, error) {
 	return list, nil
 }
 
+func (db *DB) GetSyncTaskByID(id string) (SyncTask, error) {
+	var t SyncTask
+	var enabledVal int
+	var lastSync sql.NullString
+	err := db.Conn.QueryRow("SELECT id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync FROM sync_tasks WHERE id = ?", id).Scan(&t.ID, &t.LocalPath, &t.TargetFolderID, &t.AccountID, &t.SyncMode, &enabledVal, &lastSync)
+	if err != nil {
+		return t, err
+	}
+	t.Enabled = enabledVal == 1
+	if lastSync.Valid {
+		t.LastSync = lastSync.String
+	}
+	return t, nil
+}
+
+
 func (db *DB) AddSyncTask(t SyncTask) error {
 	enabledVal := 0
 	if t.Enabled {

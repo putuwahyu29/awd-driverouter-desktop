@@ -674,6 +674,12 @@ function App() {
       fetchGeneralActivities();
     } else if (view === 'settings') {
       fetchSyncTasks();
+      const offSync = EventsOn('sync_tasks_updated', () => {
+        fetchSyncTasks();
+      });
+      return () => {
+        if (offSync) offSync();
+      };
     }
   }, [parentID, view, searchKeyword]);
 
@@ -903,22 +909,42 @@ function App() {
     setModal({ type: 'backup-task' });
   };
 
-  const handleRemoveSyncTask = async (id: string, localPath: string) => {
-    const confirmation = window.confirm(
+  const handleRunSyncTaskNow = async (id: string, localPath: string) => {
+    try {
+      showToast(
+        lang === 'id'
+          ? `Memulai pemeriksaan & sinkronisasi backup untuk "${localPath}"...`
+          : `Starting backup check & sync for "${localPath}"...`
+      );
+      // @ts-ignore
+      await window.go.main.App.RunSyncTaskNowByID(id);
+    } catch (err) {
+      showInfoDialog("Error", "Failed to start backup sync: " + err);
+    }
+  };
+
+  const handleRemoveSyncTask = (id: string, localPath: string) => {
+    showConfirmDialog(
+      lang === 'id' ? 'Hapus Tugas Backup' : 'Delete Backup Task',
       lang === 'id'
         ? `Apakah Anda yakin ingin menghapus tugas backup untuk folder "${localPath}"?`
-        : `Are you sure you want to delete the backup task for "${localPath}"?`
+        : `Are you sure you want to delete the backup task for "${localPath}"?`,
+      async () => {
+        try {
+          // @ts-ignore
+          await window.go.main.App.RemoveSyncTask(id);
+          fetchSyncTasks();
+          showToast(lang === 'id' ? 'Tugas backup berhasil dihapus' : 'Backup task removed');
+        } catch (err) {
+          showInfoDialog("Error", "Failed to remove backup task: " + err);
+        }
+      },
+      {
+        variant: 'danger',
+        confirmLabel: lang === 'id' ? 'Hapus' : 'Delete',
+        cancelLabel: lang === 'id' ? 'Batal' : 'Cancel',
+      }
     );
-    if (!confirmation) return;
-
-    try {
-      // @ts-ignore
-      await window.go.main.App.RemoveSyncTask(id);
-      fetchSyncTasks();
-      showToast(lang === 'id' ? 'Tugas backup berhasil dihapus' : 'Backup task removed');
-    } catch (err) {
-      showInfoDialog("Error", "Failed to remove backup task: " + err);
-    }
   };
 
   const handleToggleSyncTask = async (id: string, enabled: boolean) => {
@@ -3420,28 +3446,36 @@ function App() {
                         className="btn btn-filled"
                         style={{ backgroundColor: 'var(--md-sys-color-error)', color: 'var(--md-sys-color-on-error)' }}
                         disabled={selectedIDs.length === 0}
-                        onClick={async () => {
-                          const conf = confirm(`Are you sure you want to permanently delete the ${selectedIDs.length} selected duplicate files?`);
-                          if (!conf) return;
-                          
-                          let successCount = 0;
-                          let failCount = 0;
-                          
-                          for (const id of selectedIDs) {
-                            try {
-                              const file = duplicateFiles.find(f => f.id === id);
-                              if (file) {
-                                await DeleteFile(file.id);
-                                successCount++;
+                        onClick={() => {
+                          showConfirmDialog(
+                            lang === 'id' ? 'Hapus Berkas Duplikat' : 'Delete Duplicate Files',
+                            `Are you sure you want to permanently delete the ${selectedIDs.length} selected duplicate files?`,
+                            async () => {
+                              let successCount = 0;
+                              let failCount = 0;
+                              
+                              for (const id of selectedIDs) {
+                                try {
+                                  const file = duplicateFiles.find(f => f.id === id);
+                                  if (file) {
+                                    await DeleteFile(file.id);
+                                    successCount++;
+                                  }
+                                } catch (e) {
+                                  failCount++;
+                                }
                               }
-                            } catch (e) {
-                              failCount++;
-                            }
-                          }
-                          
-                          setSelectedIDs([]);
-                          showInfoDialog("Cleanup Complete", `Deleted ${successCount} duplicate files successfully.${failCount > 0 ? ` Failed to delete ${failCount} files.` : ''}`, 'info');
-                          scanDuplicateFiles();
+                              
+                              if (successCount > 0) {
+                                showInfoDialog("Deletion Complete", `Successfully deleted ${successCount} duplicate files.${failCount > 0 ? ` (${failCount} failed)` : ''}`, "info");
+                                setSelectedIDs([]);
+                                scanDuplicateFiles();
+                              } else {
+                                showInfoDialog("Error", "Failed to delete selected duplicate files.");
+                              }
+                            },
+                            { variant: 'danger', confirmLabel: 'Delete', cancelLabel: 'Cancel' }
+                          );
                         }}
                       >
                         Delete Selected Duplicates ({selectedIDs.length})
@@ -3515,17 +3549,21 @@ function App() {
                                             type="button"
                                             className="icon-btn"
                                             style={{ color: 'var(--md-sys-color-error)', cursor: 'pointer' }}
-                                            onClick={async () => {
-                                              const conf = confirm(`Are you sure you want to permanently delete this copy from ${acc?.displayName || item.provider}?`);
-                                              if (conf) {
-                                                try {
-                                                  await DeleteFile(item.id);
-                                                  showInfoDialog("Deleted", "Duplicate copy deleted successfully.", "info");
-                                                  scanDuplicateFiles();
-                                                } catch (e) {
-                                                  showInfoDialog("Error", "Failed to delete: " + e);
-                                                }
-                                              }
+                                            onClick={() => {
+                                              showConfirmDialog(
+                                                lang === 'id' ? 'Hapus Salinan Duplikat' : 'Delete Duplicate Copy',
+                                                `Are you sure you want to permanently delete this copy from ${acc?.displayName || item.provider}?`,
+                                                async () => {
+                                                  try {
+                                                    await DeleteFile(item.id);
+                                                    showInfoDialog("Deleted", "Duplicate copy deleted successfully.", "info");
+                                                    scanDuplicateFiles();
+                                                  } catch (e) {
+                                                    showInfoDialog("Error", "Failed to delete: " + e);
+                                                  }
+                                                },
+                                                { variant: 'danger', confirmLabel: 'Delete', cancelLabel: 'Cancel' }
+                                              );
                                             }}
                                           >
                                             <IconDelete />
@@ -3743,6 +3781,15 @@ function App() {
                               type="button"
                               className="icon-btn"
                               style={{ color: 'var(--md-sys-color-primary)', cursor: 'pointer' }}
+                              onClick={() => handleRunSyncTaskNow(task.id, task.localPath)}
+                              title={lang === 'id' ? 'Cek & Sinkronkan Sekarang' : 'Check & Sync Now'}
+                            >
+                              <IconRefresh />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              style={{ color: 'var(--md-sys-color-primary)', cursor: 'pointer' }}
                               onClick={() => handleEditSyncTaskClick(task)}
                               title="Edit"
                             >
@@ -3753,6 +3800,7 @@ function App() {
                               className="icon-btn"
                               style={{ color: 'var(--md-sys-color-error)', cursor: 'pointer' }}
                               onClick={() => handleRemoveSyncTask(task.id, task.localPath)}
+                              title={lang === 'id' ? 'Hapus Tugas Backup' : 'Delete Backup Task'}
                             >
                               <IconDelete />
                             </button>

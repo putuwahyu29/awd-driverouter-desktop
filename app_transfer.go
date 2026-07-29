@@ -486,7 +486,15 @@ func (a *App) uploadFileFromPath(parentVirtualID string, localPath string, manua
 			physParentID := parentPhysicalIDs[target.ID]
 			runtime.LogInfof(a.ctx, "Uploading %s to %s (%s)...", filename, target.DisplayName, strategyName)
 
-			physID, err := p.UploadFile(physParentID, filename, progressTracker.reader(file), size)
+			var physID string
+			physID, err = retryOn429(func() (string, error) {
+				f, fErr := os.Open(localPath)
+				if fErr != nil {
+					return "", fErr
+				}
+				defer f.Close()
+				return p.UploadFile(physParentID, filename, progressTracker.reader(f), size)
+			})
 			file.Close()
 			if err != nil {
 				if a.uploadHub != nil {
@@ -568,6 +576,29 @@ func (a *App) uploadFileFromPath(parentVirtualID string, localPath string, manua
 	return nil
 }
 
+// retryOn429 handles HTTP 429 Rate Limiting / TooManyRequests with exponential backoff.
+func retryOn429[T any](fn func() (T, error)) (T, error) {
+	var zero T
+	maxRetries := 4
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		res, fnErr := fn()
+		if fnErr == nil {
+			return res, nil
+		}
+		err = fnErr
+		errStr := strings.ToLower(fnErr.Error())
+		if strings.Contains(errStr, "429") || strings.Contains(errStr, "toomanyrequests") || strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "please try again later") {
+			backoff := time.Duration(1500*(i+1)) * time.Millisecond
+			log.Printf("HTTP 429 Rate limited. Retrying in %v (Attempt %d/%d)...", backoff, i+1, maxRetries)
+			time.Sleep(backoff)
+			continue
+		}
+		return zero, fnErr
+	}
+	return zero, err
+}
+
 // resolvePhysicalFolder finds or creates the matching physical path sequence on the target provider.
 func (a *App) resolvePhysicalFolder(virtualFolderID string, account db.AccountRecord) (string, error) {
 	if virtualFolderID == "root" || virtualFolderID == "" {
@@ -600,7 +631,9 @@ func (a *App) resolvePhysicalFolder(virtualFolderID string, account db.AccountRe
 		return "", err
 	}
 
-	physID, err := p.CreateFolder(physParentID, vFolder.Name)
+	physID, err := retryOn429(func() (string, error) {
+		return p.CreateFolder(physParentID, vFolder.Name)
+	})
 	if err != nil {
 		return "", err
 	}

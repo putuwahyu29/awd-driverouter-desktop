@@ -36,7 +36,7 @@ export default function WebShareManagement({ lang, addToast }: WebShareManagemen
     if (addToast) {
       addToast(msg, type);
     } else {
-      alert(msg);
+      console.log(`[Notification ${type}]:`, msg);
     }
   };
 

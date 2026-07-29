@@ -238,6 +238,10 @@ export function RunSyncTaskNow(arg1) {
   return window['go']['main']['App']['RunSyncTaskNow'](arg1);
 }
 
+export function RunSyncTaskNowByID(arg1) {
+  return window['go']['main']['App']['RunSyncTaskNowByID'](arg1);
+}
+
 export function SaveCredentials(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveCredentials'](arg1, arg2, arg3);
 }

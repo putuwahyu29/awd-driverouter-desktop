@@ -122,6 +122,8 @@ export function RestoreFile(arg1:string):Promise<void>;
 
 export function RunSyncTaskNow(arg1:db.SyncTask):Promise<void>;
 
+export function RunSyncTaskNowByID(arg1:string):Promise<void>;
+
 export function SaveCredentials(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSetting(arg1:string,arg2:string):Promise<void>;
