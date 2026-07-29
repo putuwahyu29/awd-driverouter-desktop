@@ -185,7 +185,7 @@ func isSystemOrIgnoredFile(name string) bool {
 		return true
 	}
 	switch lower {
-	case "desktop.ini", "thumbs.db", ".ds_store", "icon\r", "ntuser.dat", "ntuser.dat.log1", "ntuser.dat.log2", "system volume information", "$recycle.bin":
+	case "desktop.ini", "thumbs.db", ".ds_store", "icon\r", "ntuser.dat", "ntuser.dat.log1", "ntuser.dat.log2", "system volume information", "$recycle.bin", "my documents", "my videos", "my music", "my pictures", "application data", "local settings", "printhood", "nethood", "recent", "sendto", "start menu", "templates":
 		return true
 	}
 	return false
@@ -316,6 +316,14 @@ func (a *App) runSyncTaskOnly(task db.SyncTask) {
 
 		filename := d.Name()
 		if isSystemOrIgnoredFile(filename) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Skip NTFS Junction Points & Symlinks to prevent Access Denied on legacy Windows links
+		if d.Type()&os.ModeSymlink != 0 || d.Type()&os.ModeIrregular != 0 {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}

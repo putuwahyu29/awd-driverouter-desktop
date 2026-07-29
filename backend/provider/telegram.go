@@ -7,9 +7,53 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type BotTelegramCaptionMetadata struct {
+	VFolderID    string
+	GroupID      string
+	PartIndex    int
+	TotalParts   int
+	OriginalName string
+	IsFolder     bool
+}
+
+func parseBotTelegramCaptionMetadata(caption string) *BotTelegramCaptionMetadata {
+	if !strings.HasPrefix(caption, "[TD_") || !strings.HasSuffix(caption, "]") {
+		return nil
+	}
+	content := caption[1 : len(caption)-1]
+	parts := strings.Split(content, "|")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	meta := &BotTelegramCaptionMetadata{}
+	for _, p := range parts[1:] {
+		if strings.HasPrefix(p, "ID:") {
+			meta.GroupID = strings.TrimPrefix(p, "ID:")
+		} else if strings.HasPrefix(p, "VDIR:") {
+			meta.VFolderID = strings.TrimPrefix(p, "VDIR:")
+		} else if strings.HasPrefix(p, "NAME:") {
+			meta.OriginalName = strings.TrimPrefix(p, "NAME:")
+		} else if strings.HasPrefix(p, "PART:") {
+			partStr := strings.TrimPrefix(p, "PART:")
+			subParts := strings.Split(partStr, "/")
+			if len(subParts) == 2 {
+				meta.PartIndex, _ = strconv.Atoi(subParts[0])
+				meta.TotalParts, _ = strconv.Atoi(subParts[1])
+			}
+		} else if p == "FOLDER:true" {
+			meta.IsFolder = true
+		}
+	}
+	return meta
+}
 
 // TelegramProvider implements the Provider interface for Telegram Channel Storage.
 // It maps credentials as follows:
@@ -70,8 +114,9 @@ func (t *TelegramProvider) ListDirectory(remoteParentID string) ([]FileMetadata,
 }
 
 func (t *TelegramProvider) CreateFolder(remoteParentID string, name string) (string, error) {
-	// Virtual directories; nothing to create on Telegram.
-	return "virtual", nil
+	// Use Virtual Folder for new folders and backup tasks to avoid creating extra Telegram Channels/Chat spam
+	vFolderID := fmt.Sprintf("vfolder_%s_%d", uuid.New().String()[:8], time.Now().Unix())
+	return vFolderID, nil
 }
 
 func (t *TelegramProvider) UploadFile(remoteParentID string, filename string, r io.Reader, size int64) (string, error) {
@@ -81,6 +126,11 @@ func (t *TelegramProvider) UploadFile(remoteParentID string, filename string, r 
 	err := writer.WriteField("chat_id", t.ChatID)
 	if err != nil {
 		return "", err
+	}
+
+	if strings.HasPrefix(remoteParentID, "vfolder_") || (remoteParentID != "root" && remoteParentID != "") {
+		caption := fmt.Sprintf("[TD_VDIR|VDIR:%s|NAME:%s]", remoteParentID, filename)
+		_ = writer.WriteField("caption", caption)
 	}
 
 	part, err := writer.CreateFormFile("document", filename)

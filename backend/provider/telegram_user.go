@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -19,6 +20,47 @@ import (
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 )
+
+type TelegramCaptionMetadata struct {
+	VFolderID    string
+	GroupID      string
+	PartIndex    int
+	TotalParts   int
+	OriginalName string
+	IsFolder     bool
+}
+
+func parseTelegramCaptionMetadata(caption string) *TelegramCaptionMetadata {
+	if !strings.HasPrefix(caption, "[TD_") || !strings.HasSuffix(caption, "]") {
+		return nil
+	}
+	content := caption[1 : len(caption)-1]
+	parts := strings.Split(content, "|")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	meta := &TelegramCaptionMetadata{}
+	for _, p := range parts[1:] {
+		if strings.HasPrefix(p, "ID:") {
+			meta.GroupID = strings.TrimPrefix(p, "ID:")
+		} else if strings.HasPrefix(p, "VDIR:") {
+			meta.VFolderID = strings.TrimPrefix(p, "VDIR:")
+		} else if strings.HasPrefix(p, "NAME:") {
+			meta.OriginalName = strings.TrimPrefix(p, "NAME:")
+		} else if strings.HasPrefix(p, "PART:") {
+			partStr := strings.TrimPrefix(p, "PART:")
+			subParts := strings.Split(partStr, "/")
+			if len(subParts) == 2 {
+				meta.PartIndex, _ = strconv.Atoi(subParts[0])
+				meta.TotalParts, _ = strconv.Atoi(subParts[1])
+			}
+		} else if p == "FOLDER:true" {
+			meta.IsFolder = true
+		}
+	}
+	return meta
+}
 
 
 
@@ -174,6 +216,11 @@ func (p *TelegramUserProvider) ListDirectory(remoteParentID string) ([]FileMetad
 									name = filenameAttr.FileName
 								}
 							}
+							meta := parseTelegramCaptionMetadata(msg.Message)
+							if meta != nil && meta.OriginalName != "" {
+								name = meta.OriginalName
+							}
+
 							fileRefBase64 := base64.StdEncoding.EncodeToString(doc.FileReference)
 							physID := fmt.Sprintf("%d|%d|%d|%s", msg.ID, doc.ID, doc.AccessHash, fileRefBase64)
 
@@ -181,7 +228,7 @@ func (p *TelegramUserProvider) ListDirectory(remoteParentID string) ([]FileMetad
 								ID:         physID,
 								Name:       name,
 								Size:       doc.Size,
-								IsFolder:   false,
+								IsFolder:   meta != nil && meta.IsFolder,
 								ParentID:   remoteParentID,
 								Provider:   "telegram_user",
 								PhysicalID: physID,
@@ -200,32 +247,9 @@ func (p *TelegramUserProvider) ListDirectory(remoteParentID string) ([]FileMetad
 }
 
 func (p *TelegramUserProvider) CreateFolder(remoteParentID string, name string) (string, error) {
-	var folderID string
-	err := p.runClient(func(ctx context.Context, api *tg.Client) error {
-		res, err := api.ChannelsCreateChannel(ctx, &tg.ChannelsCreateChannelRequest{
-			Broadcast: true,
-			Megagroup: false,
-			Title:     name,
-			About:     "Awd DriveRouter Telegram Folder",
-		})
-		if err != nil {
-			return err
-		}
-
-		if updates, ok := res.(*tg.Updates); ok {
-			for _, chat := range updates.Chats {
-				if c, ok := chat.(*tg.Channel); ok {
-					folderID = fmt.Sprintf("%d|%d", c.ID, c.AccessHash)
-					return nil
-				}
-			}
-		}
-		return fmt.Errorf("failed to get channel details from updates")
-	})
-	if err != nil {
-		return "", err
-	}
-	return folderID, nil
+	// Creating new folders (or backup tasks) creates Virtual Folders instead of channel spamming/FloodWait
+	vFolderID := fmt.Sprintf("vfolder_%s_%d", uuid.New().String()[:8], time.Now().Unix())
+	return vFolderID, nil
 }
 
 func (p *TelegramUserProvider) UploadFile(remoteParentID string, filename string, r io.Reader, size int64) (string, error) {
@@ -244,9 +268,15 @@ func (p *TelegramUserProvider) UploadFile(remoteParentID string, filename string
 			return fmt.Errorf("failed to upload reader: %w", err)
 		}
 
+		caption := ""
+		if strings.HasPrefix(remoteParentID, "vfolder_") || remoteParentID != "root" && remoteParentID != "" {
+			caption = fmt.Sprintf("[TD_VDIR|VDIR:%s|NAME:%s]", remoteParentID, filename)
+		}
+
 		res, err := api.MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 			Peer:     peer,
 			RandomID: rand.Int63(),
+			Message:  caption,
 			Media: &tg.InputMediaUploadedDocument{
 				File:     upload,
 				MimeType: "application/octet-stream",
