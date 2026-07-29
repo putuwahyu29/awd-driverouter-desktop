@@ -130,6 +130,10 @@ export function GetGeneralActivities(arg1) {
   return window['go']['main']['App']['GetGeneralActivities'](arg1);
 }
 
+export function GetMountedVirtualDrives() {
+  return window['go']['main']['App']['GetMountedVirtualDrives']();
+}
+
 export function GetRecentFiles() {
   return window['go']['main']['App']['GetRecentFiles']();
 }
@@ -146,6 +150,10 @@ export function GetTrashedFiles() {
   return window['go']['main']['App']['GetTrashedFiles']();
 }
 
+export function GetVirtualDriveStatus() {
+  return window['go']['main']['App']['GetVirtualDriveStatus']();
+}
+
 export function GetVirtualFolders() {
   return window['go']['main']['App']['GetVirtualFolders']();
 }
@@ -156,6 +164,10 @@ export function GetWSAuthToken() {
 
 export function IsStartupEnabled() {
   return window['go']['main']['App']['IsStartupEnabled']();
+}
+
+export function MountVirtualDrive(arg1, arg2) {
+  return window['go']['main']['App']['MountVirtualDrive'](arg1, arg2);
 }
 
 export function OpenFileInBrowser(arg1) {
@@ -214,6 +226,10 @@ export function SendTelegramCode(arg1) {
   return window['go']['main']['App']['SendTelegramCode'](arg1);
 }
 
+export function SetAutoMountOnStartup(arg1, arg2) {
+  return window['go']['main']['App']['SetAutoMountOnStartup'](arg1, arg2);
+}
+
 export function SetFileGeneralAccess(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetFileGeneralAccess'](arg1, arg2, arg3);
 }
@@ -230,12 +246,20 @@ export function StartBackupService() {
   return window['go']['main']['App']['StartBackupService']();
 }
 
+export function StartNativeWebDAVServer(arg1, arg2) {
+  return window['go']['main']['App']['StartNativeWebDAVServer'](arg1, arg2);
+}
+
 export function StartOAuthFlow(arg1) {
   return window['go']['main']['App']['StartOAuthFlow'](arg1);
 }
 
 export function StopBackupService() {
   return window['go']['main']['App']['StopBackupService']();
+}
+
+export function StopNativeWebDAVServer() {
+  return window['go']['main']['App']['StopNativeWebDAVServer']();
 }
 
 export function SyncDrives() {
@@ -248,6 +272,10 @@ export function ToggleStarred(arg1, arg2) {
 
 export function ToggleSyncTask(arg1, arg2) {
   return window['go']['main']['App']['ToggleSyncTask'](arg1, arg2);
+}
+
+export function UnmountVirtualDrive(arg1) {
+  return window['go']['main']['App']['UnmountVirtualDrive'](arg1);
 }
 
 export function UpdateBackupInterval(arg1) {

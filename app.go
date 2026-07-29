@@ -18,15 +18,16 @@ import (
 )
 
 type App struct {
-	ctx            context.Context
-	database       *db.DB
-	syncMgr        *sync.SyncManager
-	uploadHub      *transferHub
-	quitting       bool
-	minimizeToTray bool
-	backupMu       gosync.Mutex
-	backupTicker   *time.Ticker
-	backupStop     chan struct{}
+	ctx             context.Context
+	database        *db.DB
+	syncMgr         *sync.SyncManager
+	uploadHub       *transferHub
+	virtualDriveMgr *NativeVirtualDriveManager
+	quitting        bool
+	minimizeToTray  bool
+	backupMu        gosync.Mutex
+	backupTicker    *time.Ticker
+	backupStop      chan struct{}
 }
 
 func NewApp() *App {
@@ -41,6 +42,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.database = database
 	a.syncMgr = sync.NewSyncManager(database)
+	a.virtualDriveMgr = NewNativeVirtualDriveManager(a)
 
 	// Load tray setting
 	minToTrayStr, err := database.GetSetting("minimize_to_tray")
@@ -73,10 +75,31 @@ func (a *App) startup(ctx context.Context) {
 	go func() {
 		time.Sleep(2 * time.Second)
 		_ = a.syncMgr.SyncAllDrives()
+
+		// Auto-mount Virtual Drive on startup if enabled in settings
+		autoMountStr, err := database.GetSetting("auto_mount_drive")
+		if err == nil && autoMountStr == "true" {
+			autoLetter, _ := database.GetSetting("auto_mount_letter")
+			if autoLetter == "" {
+				autoLetter = "Z:"
+			}
+			log.Printf("Auto-mounting Virtual Drive %s on startup...", autoLetter)
+			_, _ = a.MountVirtualDrive("all", autoLetter)
+		}
 	}()
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	// Cleanly unmount all virtual drives on app shutdown
+	if a.virtualDriveMgr != nil {
+		a.virtualDriveMgr.mu.Lock()
+		for driveLetter := range a.virtualDriveMgr.mounts {
+			log.Printf("Unmounting virtual drive %s on app shutdown...", driveLetter)
+			_ = a.UnmountVirtualDrive(driveLetter)
+		}
+		a.virtualDriveMgr.mu.Unlock()
+	}
+
 	a.StopBackupService()
 	a.stopUploadWebSocketServer()
 	if a.database != nil {

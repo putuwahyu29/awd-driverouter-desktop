@@ -68,6 +68,8 @@ export function GetFiles(arg1:string,arg2:boolean,arg3:string):Promise<Array<db.
 
 export function GetGeneralActivities(arg1:number):Promise<Array<db.ActivityRecord>>;
 
+export function GetMountedVirtualDrives():Promise<Array<main.MountedDriveInfo>>;
+
 export function GetRecentFiles():Promise<Array<db.FileRecord>>;
 
 export function GetSettings():Promise<Record<string, string>>;
@@ -76,11 +78,15 @@ export function GetSyncTasks():Promise<Array<db.SyncTask>>;
 
 export function GetTrashedFiles():Promise<Array<db.FileRecord>>;
 
+export function GetVirtualDriveStatus():Promise<main.VirtualDriveStatus>;
+
 export function GetVirtualFolders():Promise<Array<db.FileRecord>>;
 
 export function GetWSAuthToken():Promise<string>;
 
 export function IsStartupEnabled():Promise<boolean>;
+
+export function MountVirtualDrive(arg1:string,arg2:string):Promise<main.MountedDriveInfo>;
 
 export function OpenFileInBrowser(arg1:string):Promise<void>;
 
@@ -110,6 +116,8 @@ export function SelectBackupFolder():Promise<string>;
 
 export function SendTelegramCode(arg1:string):Promise<string>;
 
+export function SetAutoMountOnStartup(arg1:boolean,arg2:string):Promise<void>;
+
 export function SetFileGeneralAccess(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetStartup(arg1:boolean):Promise<Record<string, any>>;
@@ -118,15 +126,21 @@ export function ShowWindow():Promise<void>;
 
 export function StartBackupService():Promise<void>;
 
+export function StartNativeWebDAVServer(arg1:number,arg2:string):Promise<string>;
+
 export function StartOAuthFlow(arg1:string):Promise<db.AccountRecord>;
 
 export function StopBackupService():Promise<void>;
+
+export function StopNativeWebDAVServer():Promise<void>;
 
 export function SyncDrives():Promise<void>;
 
 export function ToggleStarred(arg1:string,arg2:boolean):Promise<void>;
 
 export function ToggleSyncTask(arg1:string,arg2:boolean):Promise<void>;
+
+export function UnmountVirtualDrive(arg1:string):Promise<void>;
 
 export function UpdateBackupInterval(arg1:number):Promise<void>;
 

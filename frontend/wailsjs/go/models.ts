@@ -135,6 +135,49 @@ export namespace db {
 
 export namespace main {
 	
+	export class MountedDriveInfo {
+	    id: string;
+	    driveLetter: string;
+	    accountId: string;
+	    targetName: string;
+	    url: string;
+	    // Go type: time
+	    startTime: any;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MountedDriveInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.driveLetter = source["driveLetter"];
+	        this.accountId = source["accountId"];
+	        this.targetName = source["targetName"];
+	        this.url = source["url"];
+	        this.startTime = this.convertValues(source["startTime"], null);
+	        this.status = source["status"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class VersionCheckResult {
 	    has_update: boolean;
 	    latest_version: string;
@@ -151,6 +194,32 @@ export namespace main {
 	        this.latest_version = source["latest_version"];
 	        this.update_url = source["update_url"];
 	        this.release_notes = source["release_notes"];
+	    }
+	}
+	export class VirtualDriveStatus {
+	    activeDriveCount: number;
+	    availableDrives: string[];
+	    webdavServerPort: number;
+	    webdavRunning: boolean;
+	    webdavPassword: string;
+	    os: string;
+	    autoMountOnStart: boolean;
+	    autoMountLetter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VirtualDriveStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.activeDriveCount = source["activeDriveCount"];
+	        this.availableDrives = source["availableDrives"];
+	        this.webdavServerPort = source["webdavServerPort"];
+	        this.webdavRunning = source["webdavRunning"];
+	        this.webdavPassword = source["webdavPassword"];
+	        this.os = source["os"];
+	        this.autoMountOnStart = source["autoMountOnStart"];
+	        this.autoMountLetter = source["autoMountLetter"];
 	    }
 	}
 

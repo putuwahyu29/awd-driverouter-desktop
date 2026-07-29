@@ -74,7 +74,14 @@ func (sm *SyncManager) SyncAccount(acc db.AccountRecord, p provider.Provider) er
 
 		items, err := p.ListDirectory(current.remoteParentID)
 		if err != nil {
-			log.Printf("Warning: failed to list folder %s: %v", current.remoteParentID, err)
+			errStr := strings.ToLower(err.Error())
+			if strings.Contains(errStr, "invalid_grant") || strings.Contains(errStr, "token has expired") || strings.Contains(errStr, "token expired") || strings.Contains(errStr, "expired_token") || strings.Contains(errStr, "oauth2:") {
+				log.Printf("Account %s (%s) OAuth token expired (%v). Deactivating account sync until user re-authenticates.", acc.DisplayName, acc.Provider, err)
+				acc.Active = false
+				_ = sm.Database.SaveAccount(acc)
+				return fmt.Errorf("oauth token expired for account %s: %v", acc.DisplayName, err)
+			}
+			log.Printf("Warning: failed to list folder %s for account %s: %v", current.remoteParentID, acc.DisplayName, err)
 			continue
 		}
 

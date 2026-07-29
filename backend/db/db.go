@@ -65,6 +65,44 @@ func InitDB() (*DB, error) {
 		return nil, fmt.Errorf("failed to create app data directory: %w", err)
 	}
 	dbPath := filepath.Join(appDir, "awd_driverouter.db")
+
+	// Migration check: If target DB does not exist or is empty, auto-migrate from legacy paths
+	shouldMigrate := false
+	if info, err := os.Stat(dbPath); os.IsNotExist(err) || info.Size() == 0 {
+		shouldMigrate = true
+	} else {
+		// Test if current database has 0 accounts
+		tempDB, err := InitDBFromPath(dbPath)
+		if err == nil {
+			var count int
+			_ = tempDB.Conn.QueryRow("SELECT COUNT(*) FROM accounts").Scan(&count)
+			if count == 0 {
+				shouldMigrate = true
+			}
+			tempDB.Conn.Close()
+		}
+	}
+
+	if shouldMigrate {
+		oldPaths := []string{
+			filepath.Join(configDir, "driverouter", "driverouter.db"),
+			filepath.Join(configDir, "teledrive", "teledrive.db"),
+			filepath.Join(configDir, "Teledrive", "teledrive.db"),
+			filepath.Join(".", "teledrive.db"),
+			filepath.Join(".", "driverouter.db"),
+		}
+		for _, old := range oldPaths {
+			if info, err := os.Stat(old); err == nil && info.Size() > 0 {
+				data, err := os.ReadFile(old)
+				if err == nil && len(data) > 0 {
+					_ = os.WriteFile(dbPath, data, 0644)
+					log.Printf("[Migration] Successfully restored database from %s -> %s", old, dbPath)
+					break
+				}
+			}
+		}
+	}
+
 	return InitDBFromPath(dbPath)
 }
 

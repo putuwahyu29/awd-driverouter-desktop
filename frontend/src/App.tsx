@@ -84,14 +84,16 @@ import {
   FileIcon
 } from './components/Icons';
 import AboutView from './components/AboutView';
+import VirtualDriveView from './components/VirtualDriveView';
 import { PROVIDER_GUIDES } from './providerGuides';
 
 // @ts-ignore
 import { CheckForUpdates, OpenReleaseURL } from '../wailsjs/go/main/App';
 
 function App() {
-  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash' | 'about'>('home');
+  const [view, setView] = useState<'home' | 'explorer' | 'starred' | 'accounts' | 'settings' | 'shared' | 'recent' | 'storage' | 'trash' | 'about' | 'rclone'>('home');
   const [storageTab, setStorageTab] = useState<'overview' | 'allocation' | 'duplicates'>('overview');
+  const [settingsTab, setSettingsTab] = useState<'general' | 'vdisk' | 'backup' | 'api'>('general');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [parentID, setParentID] = useState<string>('root');
@@ -3448,358 +3450,407 @@ function App() {
             </div>
 
             <div className="content-scroll" style={{ width: '100%', marginTop: '16px', paddingBottom: '40px' }}>
-              {/* Language Selection Setting */}
-              <div className="form-group" style={{ marginBottom: '28px' }}>
-                <label className="form-label" style={{ fontSize: '14px', fontWeight: '600' }}>{t('languageSetting')}</label>
-                <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '8px' }}>
-                  {t('languageSettingDesc')}
-                </p>
-                <select
-                  className="form-input"
-                  style={{ height: '42px', padding: '0 8px' }}
-                  value={lang}
-                  onChange={(e) => handleLanguageChange(e.target.value as 'en' | 'id')}
-                >
-                  <option value="en">{t('english')}</option>
-                  <option value="id">{t('indonesian')}</option>
-                </select>
-              </div>
-
-              {/* Minimize to Tray Setting */}
-              <div className="form-group" style={{ marginBottom: '28px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="form-label" style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={minToTray}
-                    onChange={(e) => handleMinimizeTrayChange(e.target.checked)}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <span>{t('minimizeToTraySetting')}</span>
-                </label>
-                <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
-                  {t('minimizeToTrayDesc')}
-                </p>
-              </div>
-
-              {/* Auto Startup Setting */}
-              <div className="form-group" style={{ marginBottom: '28px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="form-label" style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={autoStartup}
-                    onChange={async (e) => {
-                      const enabled = e.target.checked;
-                      setAutoStartup(enabled);
-                      try {
-                        // @ts-ignore
-                        const res = await window.go?.main?.App?.SetStartup(enabled);
-                        if (res && res.success === false) {
-                          setAutoStartup(!enabled);
-                          showInfoDialog("Error", "Failed to update startup setting: " + res.error);
-                        } else {
-                          showToast(enabled ? (lang === 'id' ? 'Startup otomatis diaktifkan' : 'Auto startup enabled') : (lang === 'id' ? 'Startup otomatis dinonaktifkan' : 'Auto startup disabled'));
-                        }
-                      } catch (err) {
-                        setAutoStartup(!enabled);
-                        showInfoDialog("Error", "Failed to update startup setting: " + err);
-                      }
-                    }}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <span>{t('autoStartupSetting')}</span>
-                </label>
-                <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
-                  {t('autoStartupDesc')}
-                </p>
-              </div>
-
-              {/* Automated Folder Sync & Backup Tasks */}
-              <div style={{ marginTop: '32px', borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: '28px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600' }}>{t('backupSettings')}</h3>
-                    <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', lineHeight: '1.4' }}>
-                      {t('autoBackupTasks')}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                        {t('backupIntervalSetting')}:
-                      </span>
-                      <select
-                        className="form-input"
-                        style={{ height: '36px', padding: '0 8px', fontSize: '12px', width: '130px', margin: 0 }}
-                        value={backupInterval}
-                        onChange={(e) => handleBackupIntervalChange(parseInt(e.target.value))}
-                      >
-                        <option value={60}>{t('minute1')}</option>
-                        <option value={300}>{t('minutes5')}</option>
-                        <option value={600}>{t('minutes10')}</option>
-                        <option value={1800}>{t('minutes30')}</option>
-                        <option value={3600}>{t('hour1')}</option>
-                      </select>
-                    </div>
+              {/* Settings Sub-Tabs Header (Pill Style matching Storage Menu) */}
+              <div className="tab-buttons" style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                {[
+                  { key: 'general', label: t('settingsTabGeneral') },
+                  { key: 'vdisk', label: t('settingsTabVirtualDrive') },
+                  { key: 'backup', label: t('settingsTabSyncTasks') },
+                  { key: 'api', label: t('settingsTabApiConfig') }
+                ].map(tab => {
+                  const isActive = settingsTab === tab.key;
+                  return (
                     <button
+                      key={tab.key}
                       type="button"
-                      className="btn btn-filled"
-                      onClick={() => {
-                        setBackupLocalPath('');
-                        setBackupTargetFolderID('root');
-                        setBackupAccountID('auto');
-                        setBackupSyncMode('one-way');
-                        setEditingSyncTask(null);
-                        setModal({ type: 'backup-task' });
+                      className="btn"
+                      onClick={() => setSettingsTab(tab.key as any)}
+                      style={{
+                        borderRadius: '100px',
+                        padding: '8px 20px',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        border: isActive ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
+                        backgroundColor: isActive ? 'var(--md-sys-color-primary-container)' : 'transparent',
+                        color: isActive ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
                       }}
                     >
-                      {t('addBackupTask')}
+                      {tab.label}
                     </button>
+                  );
+                })}
+              </div>
+
+              {/* TAB 1: GENERAL SETTINGS */}
+              {settingsTab === 'general' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '640px' }}>
+                  {/* Language Selection */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '14px', fontWeight: '600' }}>{t('languageSetting')}</label>
+                    <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '8px' }}>
+                      {t('languageSettingDesc')}
+                    </p>
+                    <select
+                      className="form-input"
+                      style={{ height: '42px', padding: '0 12px', borderRadius: '8px' }}
+                      value={lang}
+                      onChange={(e) => handleLanguageChange(e.target.value as 'en' | 'id')}
+                    >
+                      <option value="en">{t('english')}</option>
+                      <option value="id">{t('indonesian')}</option>
+                    </select>
+                  </div>
+
+                  {/* Minimize to Tray Setting */}
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label className="form-label" style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={minToTray}
+                        onChange={(e) => handleMinimizeTrayChange(e.target.checked)}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <span>{t('minimizeToTraySetting')}</span>
+                    </label>
+                    <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
+                      {t('minimizeToTrayDesc')}
+                    </p>
+                  </div>
+
+                  {/* Auto Startup Setting */}
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label className="form-label" style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoStartup}
+                        onChange={async (e) => {
+                          const enabled = e.target.checked;
+                          setAutoStartup(enabled);
+                          try {
+                            // @ts-ignore
+                            const res = await window.go?.main?.App?.SetStartup(enabled);
+                            if (res && res.success === false) {
+                              setAutoStartup(!enabled);
+                              showInfoDialog("Error", "Failed to update startup setting: " + res.error);
+                            } else {
+                              showToast(enabled ? (lang === 'id' ? 'Startup otomatis diaktifkan' : 'Auto startup enabled') : (lang === 'id' ? 'Startup otomatis dinonaktifkan' : 'Auto startup disabled'));
+                            }
+                          } catch (err) {
+                            setAutoStartup(!enabled);
+                            showInfoDialog("Error", "Failed to update startup setting: " + err);
+                          }
+                        }}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <span>{t('autoStartupSetting')}</span>
+                    </label>
+                    <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', paddingLeft: '28px', lineHeight: '1.4' }}>
+                      {t('autoStartupDesc')}
+                    </p>
                   </div>
                 </div>
+              )}
 
-                {syncTasksLoading && <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>Loading tasks...</p>}
-                {!syncTasksLoading && syncTasks.length === 0 && (
-                  <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>{t('backupEmpty')}</p>
-                )}
-                {!syncTasksLoading && syncTasks.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
-                    {syncTasks.map(task => (
-                      <div key={task.id} className="dashboard-card" style={{ padding: '16px 20px', margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                          <span style={{ fontSize: '14px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={task.localPath}>
-                            {task.localPath}
-                          </span>
-                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                            <span>Mode: <strong>{task.syncMode === 'two-way' ? t('twoWay') : t('oneWay')}</strong></span>
-                            <span>Destination: <strong>{task.accountId === 'auto' ? t('autoAllocate') : (accounts.find(a => a.id === task.accountId)?.displayName || task.accountId)}</strong></span>
-                            {task.lastSync && <span>{t('lastSync')}: {task.lastSync}</span>}
+              {/* TAB 2: VIRTUAL DRIVE ROUTER */}
+              {settingsTab === 'vdisk' && (
+                <div>
+                  <VirtualDriveView theme={theme} lang={lang} />
+                </div>
+              )}
+
+              {/* TAB 3: BACKUP & SYNC TASKS */}
+              {settingsTab === 'backup' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>{t('backupSettings')}</h3>
+                      <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', lineHeight: '1.4', margin: '4px 0 0' }}>
+                        {t('autoBackupTasks')}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                          {t('backupIntervalSetting')}:
+                        </span>
+                        <select
+                          className="form-input"
+                          style={{ height: '36px', padding: '0 8px', fontSize: '12px', width: '130px', margin: 0 }}
+                          value={backupInterval}
+                          onChange={(e) => handleBackupIntervalChange(parseInt(e.target.value))}
+                        >
+                          <option value={60}>{t('minute1')}</option>
+                          <option value={300}>{t('minutes5')}</option>
+                          <option value={600}>{t('minutes10')}</option>
+                          <option value={1800}>{t('minutes30')}</option>
+                          <option value={3600}>{t('hour1')}</option>
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-filled"
+                        onClick={() => {
+                          setBackupLocalPath('');
+                          setBackupTargetFolderID('root');
+                          setBackupAccountID('auto');
+                          setBackupSyncMode('one-way');
+                          setEditingSyncTask(null);
+                          setModal({ type: 'backup-task' });
+                        }}
+                      >
+                        {t('addBackupTask')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {syncTasksLoading && <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>Loading tasks...</p>}
+                  {!syncTasksLoading && syncTasks.length === 0 && (
+                    <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>{t('backupEmpty')}</p>
+                  )}
+                  {!syncTasksLoading && syncTasks.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
+                      {syncTasks.map(task => (
+                        <div key={task.id} className="dashboard-card" style={{ padding: '16px 20px', margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                            <span style={{ fontSize: '14px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={task.localPath}>
+                              {task.localPath}
+                            </span>
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                              <span>Mode: <strong>{task.syncMode === 'two-way' ? t('twoWay') : t('oneWay')}</strong></span>
+                              <span>Destination: <strong>{task.accountId === 'auto' ? t('autoAllocate') : (accounts.find(a => a.id === task.accountId)?.displayName || task.accountId)}</strong></span>
+                              {task.lastSync && <span>{t('lastSync')}: {task.lastSync}</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={task.enabled}
+                                onChange={(e) => handleToggleSyncTask(task.id, e.target.checked)}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                              />
+                              <span style={{ fontSize: '12px' }}>Active</span>
+                            </label>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              style={{ color: 'var(--md-sys-color-primary)', cursor: 'pointer' }}
+                              onClick={() => handleEditSyncTaskClick(task)}
+                              title="Edit"
+                            >
+                              <IconRename />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              style={{ color: 'var(--md-sys-color-error)', cursor: 'pointer' }}
+                              onClick={() => handleRemoveSyncTask(task.id, task.localPath)}
+                            >
+                              <IconDelete />
+                            </button>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={task.enabled}
-                              onChange={(e) => handleToggleSyncTask(task.id, e.target.checked)}
-                              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                            />
-                            <span style={{ fontSize: '12px' }}>Active</span>
-                          </label>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            style={{ color: 'var(--md-sys-color-primary)', cursor: 'pointer' }}
-                            onClick={() => handleEditSyncTaskClick(task)}
-                            title="Edit"
-                          >
-                            <IconRename />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            style={{ color: 'var(--md-sys-color-error)', cursor: 'pointer' }}
-                            onClick={() => handleRemoveSyncTask(task.id, task.localPath)}
-                          >
-                            <IconDelete />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: API CONFIGURATIONS */}
+              {settingsTab === 'api' && (
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{t('apiConfigs')}</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px', lineHeight: '1.4' }}>
+                    {t('apiConfigsDesc')}
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '16px' }}>
+                    {/* Google Drive Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconGoogleDrive />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('googleCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('google') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('google') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('google') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('google')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('google'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
 
-              {/* Developer Client Credentials & Setup Guides */}
-              <div style={{ marginTop: '32px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('apiConfigs')}</h3>
-                <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px', lineHeight: '1.4' }}>
-                  {t('apiConfigsDesc')}
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '16px' }}>
-                  {/* Google Drive Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconGoogleDrive />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('googleCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('google') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('google') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('google') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('google')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('google'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* OneDrive Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconOneDrive />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('onedriveCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('onedrive') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('onedrive') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('onedrive') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('onedrive')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('onedrive'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* OneDrive Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconOneDrive />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('onedriveCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('onedrive') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('onedrive') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('onedrive') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('onedrive')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('onedrive'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* Dropbox Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconDropbox />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('dropboxCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('dropbox') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('dropbox') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('dropbox') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('dropbox')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('dropbox'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Dropbox Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconDropbox />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('dropboxCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('dropbox') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('dropbox') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('dropbox') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('dropbox')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('dropbox'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* Box Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconBox />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('boxCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('box') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('box') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('box') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('box')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('box'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Box Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconBox />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('boxCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('box') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('box') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('box') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('box')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('box'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* Yandex Disk Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconYandex />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('yandexCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('yandex') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('yandex') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('yandex') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('yandex')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('yandex'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Yandex Disk Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconYandex />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('yandexCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('yandex') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('yandex') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('yandex') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('yandex')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('yandex'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* pCloud Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconPCloud />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('pcloudCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('pcloud') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('pcloud') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('pcloud') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('pcloud')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('pcloud'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* pCloud Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconPCloud />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('pcloudCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('pcloud') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('pcloud') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('pcloud') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('pcloud')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('pcloud'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Telegram User API Card */}
-                  <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <IconTelegram />
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('tgUserCreds')}</span>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          backgroundColor: isConfigured('telegram_user') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
-                          color: isConfigured('telegram_user') ? '#0f9d58' : '#ea4335'
-                        }}>
-                          {isConfigured('telegram_user') ? t('configured') : t('notConfigured')}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-text" onClick={() => openCredentialsModal('telegram_user')}>{t('editConfig')}</button>
-                        <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('telegram_user'); setShowGuideModal(true); }}>
-                          {t('showGuide')}
-                        </button>
+                    {/* Telegram User API Card */}
+                    <div className="dashboard-card" style={{ padding: '16px 20px', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <IconTelegram />
+                          <span style={{ fontWeight: '600', fontSize: '14px' }}>{t('tgUserCreds')}</span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '100px',
+                            backgroundColor: isConfigured('telegram_user') ? 'rgba(15, 157, 88, 0.1)' : 'rgba(234, 67, 53, 0.1)',
+                            color: isConfigured('telegram_user') ? '#0f9d58' : '#ea4335'
+                          }}>
+                            {isConfigured('telegram_user') ? t('configured') : t('notConfigured')}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-text" onClick={() => openCredentialsModal('telegram_user')}>{t('editConfig')}</button>
+                          <button className="btn btn-text" style={{ fontSize: '12px' }} onClick={() => { setActiveGuide('telegram_user'); setShowGuideModal(true); }}>
+                            {t('showGuide')}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
