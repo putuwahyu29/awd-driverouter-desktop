@@ -31,33 +31,55 @@ type TelegramCaptionMetadata struct {
 }
 
 func parseTelegramCaptionMetadata(caption string) *TelegramCaptionMetadata {
-	if !strings.HasPrefix(caption, "[TD_") || !strings.HasSuffix(caption, "]") {
-		return nil
-	}
-	content := caption[1 : len(caption)-1]
-	parts := strings.Split(content, "|")
-	if len(parts) < 2 {
+	if caption == "" {
 		return nil
 	}
 
 	meta := &TelegramCaptionMetadata{}
-	for _, p := range parts[1:] {
-		if strings.HasPrefix(p, "ID:") {
-			meta.GroupID = strings.TrimPrefix(p, "ID:")
-		} else if strings.HasPrefix(p, "VDIR:") {
-			meta.VFolderID = strings.TrimPrefix(p, "VDIR:")
-		} else if strings.HasPrefix(p, "NAME:") {
-			meta.OriginalName = strings.TrimPrefix(p, "NAME:")
-		} else if strings.HasPrefix(p, "PART:") {
-			partStr := strings.TrimPrefix(p, "PART:")
-			subParts := strings.Split(partStr, "/")
-			if len(subParts) == 2 {
-				meta.PartIndex, _ = strconv.Atoi(subParts[0])
-				meta.TotalParts, _ = strconv.Atoi(subParts[1])
-			}
-		} else if p == "FOLDER:true" {
-			meta.IsFolder = true
+	foundAny := false
+
+	// 1. Check for [VF:<id>] tag (from Teledrive or combined caption)
+	if idx := strings.Index(caption, "[VF:"); idx != -1 {
+		rest := caption[idx+4:]
+		if endIdx := strings.Index(rest, "]"); endIdx != -1 {
+			meta.VFolderID = strings.TrimSpace(rest[:endIdx])
+			foundAny = true
 		}
+	}
+
+	// 2. Parse structured tags like [TD_VDIR|...] or [TD_SPLIT|...]
+	startIdx := strings.Index(caption, "[TD_")
+	if startIdx != -1 {
+		endIdx := strings.Index(caption[startIdx:], "]")
+		if endIdx != -1 {
+			content := caption[startIdx+1 : startIdx+endIdx]
+			parts := strings.Split(content, "|")
+			if len(parts) >= 2 {
+				foundAny = true
+				for _, p := range parts[1:] {
+					if strings.HasPrefix(p, "ID:") {
+						meta.GroupID = strings.TrimPrefix(p, "ID:")
+					} else if strings.HasPrefix(p, "VDIR:") {
+						meta.VFolderID = strings.TrimPrefix(p, "VDIR:")
+					} else if strings.HasPrefix(p, "NAME:") {
+						meta.OriginalName = strings.TrimPrefix(p, "NAME:")
+					} else if strings.HasPrefix(p, "PART:") {
+						partStr := strings.TrimPrefix(p, "PART:")
+						subParts := strings.Split(partStr, "/")
+						if len(subParts) == 2 {
+							meta.PartIndex, _ = strconv.Atoi(subParts[0])
+							meta.TotalParts, _ = strconv.Atoi(subParts[1])
+						}
+					} else if p == "FOLDER:true" {
+						meta.IsFolder = true
+					}
+				}
+			}
+		}
+	}
+
+	if !foundAny {
+		return nil
 	}
 	return meta
 }
@@ -221,6 +243,11 @@ func (p *TelegramUserProvider) ListDirectory(remoteParentID string) ([]FileMetad
 								name = meta.OriginalName
 							}
 
+							parentID := remoteParentID
+							if meta != nil && meta.VFolderID != "" {
+								parentID = meta.VFolderID
+							}
+
 							fileRefBase64 := base64.StdEncoding.EncodeToString(doc.FileReference)
 							physID := fmt.Sprintf("%d|%d|%d|%s", msg.ID, doc.ID, doc.AccessHash, fileRefBase64)
 
@@ -229,7 +256,7 @@ func (p *TelegramUserProvider) ListDirectory(remoteParentID string) ([]FileMetad
 								Name:       name,
 								Size:       doc.Size,
 								IsFolder:   meta != nil && meta.IsFolder,
-								ParentID:   remoteParentID,
+								ParentID:   parentID,
 								Provider:   "telegram_user",
 								PhysicalID: physID,
 								CreatedAt:  time.Unix(int64(msg.Date), 0),
@@ -269,8 +296,8 @@ func (p *TelegramUserProvider) UploadFile(remoteParentID string, filename string
 		}
 
 		caption := ""
-		if strings.HasPrefix(remoteParentID, "vfolder_") || remoteParentID != "root" && remoteParentID != "" {
-			caption = fmt.Sprintf("[TD_VDIR|VDIR:%s|NAME:%s]", remoteParentID, filename)
+		if strings.HasPrefix(remoteParentID, "vfolder_") || strings.HasPrefix(remoteParentID, "vf_") || (remoteParentID != "root" && remoteParentID != "") {
+			caption = fmt.Sprintf("[TD_VDIR|VDIR:%s|NAME:%s] [VF:%s]", remoteParentID, filename, remoteParentID)
 		}
 
 		res, err := api.MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{

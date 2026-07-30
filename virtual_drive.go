@@ -150,6 +150,12 @@ func (mgr *NativeVirtualDriveManager) syncMountedDriveChanges() {
 
 		existing, err := mgr.app.database.GetFileByNameAndParent(name, parentVirtualID)
 		if err != nil || existing.ID == "" {
+			// Check if file or folder exists anywhere in the database by name to prevent false uploads of existing cloud items
+			existingByName, errByName := mgr.app.database.GetFileByName(name)
+			if errByName == nil && existingByName.ID != "" {
+				return nil
+			}
+
 			if d.IsDir() {
 				log.Printf("Mounted Drive: Auto-ingesting new folder '%s'", name)
 				_, _ = mgr.app.CreateFolder(parentVirtualID, name)
@@ -983,6 +989,15 @@ func (a *App) findFirstAvailableDriveLetter(requestedLetter string) string {
 		return cleanReq
 	}
 
+	// Try clearing any stale net use / subst mapping on the requested letter before giving up on it
+	_ = exec.Command("cmd.exe", "/c", "net use "+cleanReq+" /delete /y").Run()
+	_ = exec.Command("cmd.exe", "/c", "subst "+cleanReq+" /d").Run()
+
+	if isDriveLetterFree(cleanReq) {
+		log.Printf("Cleared stale mount on requested drive %s. Using %s.", cleanReq, cleanReq)
+		return cleanReq
+	}
+
 	for _, d := range drives {
 		if isDriveLetterFree(d) {
 			log.Printf("Drive letter conflict: requested %s is occupied. Automatically using %s instead.", cleanReq, d)
@@ -997,7 +1012,29 @@ func (a *App) MountVirtualDrive(accountID string, driveLetter string) (MountedDr
 	if driveLetter == "" {
 		driveLetter = "Z:"
 	}
-	driveLetter = a.findFirstAvailableDriveLetter(driveLetter)
+	cleanReq := strings.ToUpper(strings.TrimSuffix(driveLetter, "\\"))
+	if !strings.HasSuffix(cleanReq, ":") && runtime.GOOS == "windows" {
+		cleanReq += ":"
+	}
+
+	// Unmount any existing active drive on this letter or account to prevent duplicate/cascading mounts
+	if a.virtualDriveMgr != nil {
+		a.virtualDriveMgr.mu.Lock()
+		var staleDrives []string
+		for letter, info := range a.virtualDriveMgr.mounts {
+			if letter == cleanReq || info.AccountID == accountID {
+				staleDrives = append(staleDrives, letter)
+			}
+		}
+		a.virtualDriveMgr.mu.Unlock()
+
+		for _, letter := range staleDrives {
+			log.Printf("Unmounting existing drive %s before re-mounting...", letter)
+			_ = a.UnmountVirtualDrive(letter)
+		}
+	}
+
+	driveLetter = a.findFirstAvailableDriveLetter(cleanReq)
 	if !strings.HasSuffix(driveLetter, ":") && runtime.GOOS == "windows" {
 		driveLetter += ":"
 	}

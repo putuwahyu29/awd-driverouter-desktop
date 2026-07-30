@@ -459,6 +459,34 @@ func (db *DB) GetFileByNameAndParent(name string, parentID string) (FileRecord, 
 	return f, nil
 }
 
+func (db *DB) GetFileByName(name string) (FileRecord, error) {
+	var f FileRecord
+	var isFolderInt, starredInt, sharedInt int
+	var createdStr, modifiedStr string
+
+	err := db.Conn.QueryRow(
+		"SELECT id, name, size, is_folder, parent_id, provider, account_id, physical_id, created_at, modified_at, starred, shared FROM files WHERE name = ? AND deleted = 0 LIMIT 1",
+		name,
+	).Scan(&f.ID, &f.Name, &f.Size, &isFolderInt, &f.ParentID, &f.Provider, &f.AccountID, &f.PhysicalID, &createdStr, &modifiedStr, &starredInt, &sharedInt)
+
+	if err != nil {
+		return f, err
+	}
+
+	f.IsFolder = isFolderInt == 1
+	f.Starred = starredInt == 1
+	f.Shared = sharedInt == 1
+
+	if t, err := time.Parse(time.RFC3339, createdStr); err == nil {
+		f.CreatedAt = t
+	}
+	if t, err := time.Parse(time.RFC3339, modifiedStr); err == nil {
+		f.ModifiedAt = t
+	}
+
+	return f, nil
+}
+
 // FindFileByPhysicalID searches for a file by its physical ID map pattern.
 func (db *DB) FindFileByPhysicalID(accountID, physicalID string) (FileRecord, error) {
 	var f FileRecord
