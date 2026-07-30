@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	gosync "sync"
 	"time"
 
@@ -216,6 +217,11 @@ func (a *App) CreateFolder(parentID, name string) (string, error) {
 		parentID = "root"
 	}
 
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Folder Baru"
+	}
+
 	id := uuid.New().String()
 	record := db.FileRecord{
 		ID:         id,
@@ -233,6 +239,7 @@ func (a *App) CreateFolder(parentID, name string) (string, error) {
 		return "", err
 	}
 
+	_ = a.database.LogActivity(record.ID, record.Name, "create_folder", fmt.Sprintf("Membuat folder baru: '%s'", record.Name))
 	return id, nil
 }
 

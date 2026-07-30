@@ -172,4 +172,6 @@ export function UploadFileDialog(arg1:string,arg2:string):Promise<void>;
 
 export function UploadFileFromPath(arg1:string,arg2:string):Promise<void>;
 
+export function UploadMultipleFilesFromPaths(arg1:string,arg2:Array<string>):Promise<void>;
+
 export function VerifyTelegramCode(arg1:string,arg2:string,arg3:string):Promise<db.AccountRecord>;

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	gosync "sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -303,7 +304,17 @@ func (a *App) runSyncTaskOnly(task db.SyncTask) {
 	localFilesMap := make(map[string]bool)
 	folderCache := make(map[string]string)
 
-	// A. Recursive Scan & Upload (Local -> Cloud)
+	// Phase 1: Collect files to upload during walk (no network calls for uploads)
+	type syncUploadJob struct {
+		targetFolderID string
+		path           string
+		filename       string
+		relPath        string
+		accountID      string
+	}
+	var uploadJobs []syncUploadJob
+
+	// A. Recursive Scan (Local -> Cloud) — collect phase
 	walkErr := filepath.WalkDir(task.LocalPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			log.Printf("Sync Task permission/access warning at %s: %v", path, err)
@@ -355,30 +366,57 @@ func (a *App) runSyncTaskOnly(task db.SyncTask) {
 			return nil
 		}
 
-		log.Printf("Sync Task: Uploading %s to cloud", relPath)
-		uploadID := uuid.New().String()
-		runtime.EventsEmit(a.ctx, "upload_started", map[string]interface{}{"uploadId": uploadID, "filename": filename})
-
 		accID := task.AccountID
 		if accID == "auto" {
 			accID = ""
 		}
 
-		upErr := a.uploadFileFromPath(targetFolderID, path, accID, uploadID)
-		if upErr != nil {
-			log.Printf("Sync Task failed to upload %s: %v", relPath, upErr)
-			runtime.EventsEmit(a.ctx, "upload_failed", map[string]string{"uploadId": uploadID, "filename": filename, "error": upErr.Error()})
-			skippedCount++
-		} else {
-			log.Printf("Sync Task uploaded successfully: %s", relPath)
-			runtime.EventsEmit(a.ctx, "upload_completed", map[string]interface{}{"uploadId": uploadID, "filename": filename})
-		}
+		uploadJobs = append(uploadJobs, syncUploadJob{
+			targetFolderID: targetFolderID,
+			path:           path,
+			filename:       filename,
+			relPath:        relPath,
+			accountID:      accID,
+		})
 
 		return nil
 	})
 
 	if walkErr != nil {
 		log.Printf("Sync Task WalkDir notice: %v", walkErr)
+	}
+
+	// Phase 2: Upload collected files concurrently with bounded worker pool
+	if len(uploadJobs) > 0 {
+		log.Printf("Sync Task: uploading %d files with %d workers", len(uploadJobs), maxConcurrentUploads)
+		sem := make(chan struct{}, maxConcurrentUploads)
+		var wg gosync.WaitGroup
+
+		for _, job := range uploadJobs {
+			wg.Add(1)
+			go func(j syncUploadJob) {
+				defer wg.Done()
+				sem <- struct{}{}        // acquire slot
+				defer func() { <-sem }() // release slot
+
+				log.Printf("Sync Task: Uploading %s to cloud", j.relPath)
+				uploadID := uuid.New().String()
+				runtime.EventsEmit(a.ctx, "upload_started", map[string]interface{}{"uploadId": uploadID, "filename": j.filename})
+
+				upErr := a.uploadFileFromPath(j.targetFolderID, j.path, j.accountID, uploadID)
+				if upErr != nil {
+					log.Printf("Sync Task failed to upload %s: %v", j.relPath, upErr)
+					runtime.EventsEmit(a.ctx, "upload_failed", map[string]string{"uploadId": uploadID, "filename": j.filename, "error": upErr.Error()})
+					skippedCount++
+				} else {
+					log.Printf("Sync Task uploaded successfully: %s", j.relPath)
+					runtime.EventsEmit(a.ctx, "upload_completed", map[string]interface{}{"uploadId": uploadID, "filename": j.filename})
+				}
+			}(job)
+		}
+
+		wg.Wait()
+		log.Printf("Sync Task: finished uploading %d files", len(uploadJobs))
 	}
 
 	// B. Two-Way Sync Download (Cloud -> Local for top-level files)

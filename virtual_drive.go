@@ -129,6 +129,15 @@ func (mgr *NativeVirtualDriveManager) syncMountedDriveChanges() {
 	if mgr.app == nil || mgr.app.database == nil {
 		return
 	}
+
+	// Phase 1: Walk and collect new files/folders (no network calls)
+	type vdriveUploadJob struct {
+		parentVirtualID string
+		path            string
+		name            string
+	}
+	var uploadJobs []vdriveUploadJob
+
 	_ = filepath.WalkDir(mgr.vdiskDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || path == mgr.vdiskDir {
 			return nil
@@ -160,17 +169,44 @@ func (mgr *NativeVirtualDriveManager) syncMountedDriveChanges() {
 				log.Printf("Mounted Drive: Auto-ingesting new folder '%s'", name)
 				_, _ = mgr.app.CreateFolder(parentVirtualID, name)
 			} else {
-				info, err := d.Info()
-				if err == nil && info.Size() > 0 {
-					log.Printf("Mounted Drive: Auto-ingesting new file '%s'", name)
-					uploadID := fmt.Sprintf("vdrive-up-%d", time.Now().UnixNano())
-					_ = mgr.app.uploadFileFromPath(parentVirtualID, path, "", uploadID)
+				info, infoErr := d.Info()
+				if infoErr == nil && info.Size() > 0 {
+					// Queue for concurrent upload instead of blocking here
+					uploadJobs = append(uploadJobs, vdriveUploadJob{
+						parentVirtualID: parentVirtualID,
+						path:            path,
+						name:            name,
+					})
 				}
 			}
 		}
 		return nil
 	})
+
+	// Phase 2: Upload collected files concurrently with bounded worker pool
+	if len(uploadJobs) > 0 {
+		log.Printf("Mounted Drive: uploading %d new files with %d workers", len(uploadJobs), maxConcurrentUploads)
+		sem := make(chan struct{}, maxConcurrentUploads)
+		var wg sync.WaitGroup
+
+		for _, job := range uploadJobs {
+			wg.Add(1)
+			go func(j vdriveUploadJob) {
+				defer wg.Done()
+				sem <- struct{}{}        // acquire slot
+				defer func() { <-sem }() // release slot
+
+				log.Printf("Mounted Drive: Auto-ingesting new file '%s'", j.name)
+				uploadID := fmt.Sprintf("vdrive-up-%d", time.Now().UnixNano())
+				_ = mgr.app.uploadFileFromPath(j.parentVirtualID, j.path, "", uploadID)
+			}(job)
+		}
+
+		wg.Wait()
+		log.Printf("Mounted Drive: finished uploading %d files", len(uploadJobs))
+	}
 }
+
 
 // syncVirtualDriveRoot maps database records into vdiskDir filesystem so WebDAV shows real DriveRouter files.
 func (mgr *NativeVirtualDriveManager) syncVirtualDriveRoot(accountID string) {

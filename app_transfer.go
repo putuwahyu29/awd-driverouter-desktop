@@ -21,60 +21,215 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// UploadFileDialog triggers OS file picker and uploads selected file.
+// maxConcurrentUploads limits parallel file uploads to prevent API flooding.
+const maxConcurrentUploads = 3
+
+// UploadFileDialog triggers OS file picker (allowing selecting multiple files) and uploads selected files asynchronously.
 func (a *App) UploadFileDialog(parentID string, manualAccountID string) error {
 	if parentID == "" {
 		parentID = "root"
 	}
 
-	selectedFile, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select File to Upload to Awd DriveRouter",
+	selectedFiles, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select File(s) to Upload to Awd DriveRouter",
 	})
-	if err != nil || selectedFile == "" {
+	if err != nil || len(selectedFiles) == 0 {
 		return err
 	}
 
-	filename := filepath.Base(selectedFile)
-	uploadID := uuid.New().String()
-	runtime.EventsEmit(a.ctx, "upload_started", map[string]interface{}{"uploadId": uploadID, "filename": filename})
-
-	err = a.uploadFileFromPath(parentID, selectedFile, manualAccountID, uploadID)
-	if err != nil {
-		runtime.EventsEmit(a.ctx, "upload_failed", map[string]string{
-			"uploadId": uploadID,
-			"filename": filename,
-			"error":    err.Error(),
-		})
-		return err
-	}
-
-	runtime.EventsEmit(a.ctx, "upload_completed", map[string]interface{}{"uploadId": uploadID, "filename": filename})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("UploadFileDialog goroutine panicked: %v", r)
+			}
+		}()
+		a.uploadBatchFromPaths(parentID, selectedFiles, manualAccountID)
+	}()
 	return nil
 }
 
-// UploadFileFromPath allows the frontend (like drag-and-drop) to upload a file directly from a local path.
-func (a *App) UploadFileFromPath(parentID string, filePath string) error {
+// UploadMultipleFilesFromPaths allows uploading multiple files and/or folders from local paths asynchronously.
+func (a *App) UploadMultipleFilesFromPaths(parentID string, filePaths []string) error {
 	if parentID == "" {
 		parentID = "root"
 	}
-
-	filename := filepath.Base(filePath)
-	uploadID := uuid.New().String()
-	runtime.EventsEmit(a.ctx, "upload_started", map[string]interface{}{"uploadId": uploadID, "filename": filename})
-
-	err := a.uploadFileFromPath(parentID, filePath, "", uploadID)
-	if err != nil {
-		runtime.EventsEmit(a.ctx, "upload_failed", map[string]string{
-			"uploadId": uploadID,
-			"filename": filename,
-			"error":    err.Error(),
-		})
-		return err
+	if len(filePaths) == 0 {
+		return nil
 	}
 
-	runtime.EventsEmit(a.ctx, "upload_completed", map[string]interface{}{"uploadId": uploadID, "filename": filename})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("UploadMultipleFilesFromPaths goroutine panicked: %v", r)
+			}
+		}()
+		a.uploadBatchFromPaths(parentID, filePaths, "")
+	}()
 	return nil
 }
+
+// UploadFileFromPath allows uploading a single file or folder from a local path asynchronously.
+func (a *App) UploadFileFromPath(parentID string, filePath string) error {
+	return a.UploadMultipleFilesFromPaths(parentID, []string{filePath})
+}
+
+type uploadJobItem struct {
+	parentID        string
+	localPath       string
+	filename        string
+	manualAccountID string
+}
+
+// uploadBatchFromPaths processes multiple file or folder paths concurrently with bounded worker pool.
+func (a *App) uploadBatchFromPaths(parentVirtualID string, paths []string, manualAccountID string) {
+	if len(paths) == 0 {
+		return
+	}
+	log.Printf("Batch upload started: %d item(s)", len(paths))
+
+	var jobs []uploadJobItem
+
+	for _, localPath := range paths {
+		info, err := os.Stat(localPath)
+		if err != nil {
+			log.Printf("Batch upload: cannot access %s: %v", localPath, err)
+			continue
+		}
+
+		if info.IsDir() {
+			// Folder — walk recursively and collect jobs
+			folderName := filepath.Base(localPath)
+			runtime.EventsEmit(a.ctx, "folder_upload_started", map[string]string{"folder": folderName})
+
+			rootFolderID, err := a.CreateFolder(parentVirtualID, folderName)
+			if err != nil {
+				log.Printf("Failed to create folder '%s': %v", folderName, err)
+				runtime.EventsEmit(a.ctx, "folder_upload_failed", map[string]string{"folder": folderName, "error": err.Error()})
+				continue
+			}
+
+			folderCache := make(map[string]string)
+			folderCache[""] = rootFolderID
+			folderCache["."] = rootFolderID
+
+			_ = filepath.WalkDir(localPath, func(path string, d os.DirEntry, err error) error {
+				if err != nil || path == localPath {
+					if err != nil && d != nil && d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				name := d.Name()
+				if isSystemOrIgnoredFile(name) || d.Type()&os.ModeSymlink != 0 || d.Type()&os.ModeIrregular != 0 {
+					if d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				relPath, _ := filepath.Rel(localPath, path)
+				relDir := filepath.ToSlash(filepath.Dir(relPath))
+
+				targetParentID := rootFolderID
+				if relDir != "" && relDir != "." {
+					if cachedID, ok := folderCache[relDir]; ok {
+						targetParentID = cachedID
+					} else {
+						parts := strings.Split(relDir, "/")
+						currentParent := rootFolderID
+						accumulated := ""
+						for _, part := range parts {
+							if accumulated == "" {
+								accumulated = part
+							} else {
+								accumulated += "/" + part
+							}
+							if cachedID, ok := folderCache[accumulated]; ok {
+								currentParent = cachedID
+								continue
+							}
+							newID, createErr := a.CreateFolder(currentParent, part)
+							if createErr != nil {
+								log.Printf("Failed to create sub-folder '%s': %v", part, createErr)
+								return nil
+							}
+							folderCache[accumulated] = newID
+							currentParent = newID
+						}
+						targetParentID = currentParent
+					}
+				}
+
+				if d.IsDir() {
+					relSelf := filepath.ToSlash(relPath)
+					if _, ok := folderCache[relSelf]; !ok {
+						newID, createErr := a.CreateFolder(targetParentID, name)
+						if createErr != nil {
+							return filepath.SkipDir
+						}
+						folderCache[relSelf] = newID
+					}
+					return nil
+				}
+
+				jobs = append(jobs, uploadJobItem{
+					parentID:        targetParentID,
+					localPath:       path,
+					filename:        name,
+					manualAccountID: manualAccountID,
+				})
+				return nil
+			})
+		} else {
+			// Single file
+			filename := filepath.Base(localPath)
+			jobs = append(jobs, uploadJobItem{
+				parentID:        parentVirtualID,
+				localPath:       localPath,
+				filename:        filename,
+				manualAccountID: manualAccountID,
+			})
+		}
+	}
+
+	if len(jobs) == 0 {
+		log.Printf("Batch upload: no files to upload")
+		return
+	}
+
+	// Process jobs with bounded worker pool (maxConcurrentUploads = 3)
+	log.Printf("Batch upload: uploading %d file(s) with %d workers", len(jobs), maxConcurrentUploads)
+	sem := make(chan struct{}, maxConcurrentUploads)
+	var wg gosync.WaitGroup
+
+	for _, job := range jobs {
+		wg.Add(1)
+		go func(j uploadJobItem) {
+			defer wg.Done()
+			sem <- struct{}{}        // acquire slot
+			defer func() { <-sem }() // release slot
+
+			uploadID := uuid.New().String()
+			runtime.EventsEmit(a.ctx, "upload_started", map[string]interface{}{"uploadId": uploadID, "filename": j.filename})
+
+			if err := a.uploadFileFromPath(j.parentID, j.localPath, j.manualAccountID, uploadID); err != nil {
+				log.Printf("Batch upload: failed '%s': %v", j.filename, err)
+				runtime.EventsEmit(a.ctx, "upload_failed", map[string]string{
+					"uploadId": uploadID,
+					"filename": j.filename,
+					"error":    err.Error(),
+				})
+			} else {
+				runtime.EventsEmit(a.ctx, "upload_completed", map[string]interface{}{"uploadId": uploadID, "filename": j.filename})
+			}
+		}(job)
+	}
+
+	wg.Wait()
+	log.Printf("Batch upload completed: %d file(s)", len(jobs))
+}
+
 
 // DownloadFileDialog downloads a virtual file to the selected local path.
 func (a *App) DownloadFileDialog(virtualID string) error {

@@ -28,6 +28,7 @@ import {
   GetRecentFiles,
   PreviewFile,
   UploadFileFromPath,
+  UploadMultipleFilesFromPaths,
   CopyFileToAccount,
   GetVirtualFolders,
   RemoteUploadFromURL,
@@ -611,9 +612,7 @@ function App() {
 
     const offFileDrop = EventsOn('wails:file-drop', (x: number, y: number, paths: string[]) => {
       if (paths && paths.length > 0) {
-        paths.forEach(filePath => {
-          UploadFileFromPath(parentID, filePath).catch(e => console.error(e));
-        });
+        UploadMultipleFilesFromPaths(parentID, paths).catch(e => console.error(e));
       }
     });
 
@@ -1183,9 +1182,9 @@ function App() {
       await CopyFileToAccount(transferFile.id, selectedDestAccountID, selectedDestFolderID);
       setModal(null);
       setTransferFile(null);
-      showInfoDialog("Success", `Direct transfer for '${transferFile.name}' has been scheduled in the background. Check the Transfers Progress drawer for details.`, 'info');
+      showInfoDialog(t('success'), t('directTransferStarted'), 'info');
     } catch (err) {
-      showInfoDialog("Error", "Failed to start direct transfer: " + err);
+      showInfoDialog(t('error'), "Failed: " + err);
     } finally {
       setTransferLoading(false);
     }
@@ -1199,9 +1198,9 @@ function App() {
       await RemoteUploadFromURL(parentID, remoteUploadAccountID, remoteUploadURL);
       setModal(null);
       setRemoteUploadURL('');
-      showInfoDialog("Success", "Remote URL upload has been scheduled in the background. Check the Transfers drawer for details.", 'info');
+      showInfoDialog(t('success'), t('remoteUploadStarted'), 'info');
     } catch (err) {
-      showInfoDialog("Error", "Failed to start remote upload: " + err);
+      showInfoDialog(t('error'), "Failed: " + err);
     } finally {
       setTransferLoading(false);
     }
@@ -1216,9 +1215,9 @@ function App() {
       setModal(null);
       setZipArchiveName('');
       setSelectedIDs([]);
-      showInfoDialog("Success", "Compression task has been scheduled in the background. Check the Transfers drawer for details.", 'info');
+      showInfoDialog(t('success'), t('compressionStarted'), 'info');
     } catch (err) {
-      showInfoDialog("Error", "Failed to start compression: " + err);
+      showInfoDialog(t('error'), "Failed: " + err);
     } finally {
       setTransferLoading(false);
     }
@@ -1227,9 +1226,9 @@ function App() {
   const handleExtractZip = async (file: FileRecord) => {
     try {
       await ExtractZipFile(file.id, parentID);
-      showInfoDialog("Success", `Extraction of '${file.name}' has been scheduled in the background. Check the Transfers drawer for details.`, 'info');
+      showInfoDialog(t('success'), t('extractionStarted'), 'info');
     } catch (err) {
-      showInfoDialog("Error", "Failed to start extraction: " + err);
+      showInfoDialog(t('error'), "Failed: " + err);
     }
   };
 
@@ -1383,12 +1382,18 @@ function App() {
   };
 
   // Folder creation
+  const openCreateFolderModal = () => {
+    setFolderNameInput(t('newFolder') || 'Folder Baru');
+    setModal({ type: 'create-folder' });
+  };
+
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!folderNameInput.trim()) return;
+    const name = folderNameInput.trim();
+    if (!name) return;
 
     try {
-      await CreateFolder(parentID, folderNameInput);
+      await CreateFolder(parentID, name);
       setFolderNameInput('');
       setModal(null);
       fetchFiles(parentID);
@@ -1974,7 +1979,7 @@ function App() {
           </button>
           {showNewDropdown && (
             <div className="fab-dropdown">
-              <div className="fab-dropdown-item" onClick={() => { setShowNewDropdown(false); setModal({ type: 'create-folder' }); }}>
+              <div className="fab-dropdown-item" onClick={() => { setShowNewDropdown(false); openCreateFolderModal(); }}>
                 <IconFolder />
                 <span>{t('newFolder')}</span>
               </div>
@@ -2174,7 +2179,7 @@ function App() {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--md-sys-color-outline-variant)', paddingBottom: '8px' }}>
-                  <span style={{ fontWeight: '600', fontSize: '14px', color: 'var(--md-sys-color-on-surface)' }}>Filter Search Results</span>
+                  <span style={{ fontWeight: '600', fontSize: '14px', color: 'var(--md-sys-color-on-surface)' }}>{t('filterSearchTitle')}</span>
                   {(filterAccountID !== 'all' || filterFileType !== 'all' || filterFileSize !== 'all' || filterModDate !== 'all') && (
                     <button
                       type="button"
@@ -2195,7 +2200,7 @@ function App() {
                         borderRadius: '4px'
                       }}
                     >
-                      Clear Filters
+                      {t('clearFilters')}
                     </button>
                   )}
                 </div>
@@ -2203,7 +2208,7 @@ function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   {/* Account Filter */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>CLOUD ACCOUNT</label>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>{t('cloudAccountLabel')}</label>
                     <select
                       value={filterAccountID}
                       onChange={(e) => setFilterAccountID(e.target.value)}
@@ -2221,7 +2226,7 @@ function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="all">All Accounts</option>
+                      <option value="all">{t('allAccounts')}</option>
                       {accounts.filter(a => a.active).map(acc => (
                         <option key={acc.id} value={acc.id}>{acc.displayName} ({acc.provider.toUpperCase()})</option>
                       ))}
@@ -2230,7 +2235,7 @@ function App() {
 
                   {/* Type Filter */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>FILE TYPE</label>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>{t('fileTypeLabel')}</label>
                     <select
                       value={filterFileType}
                       onChange={(e) => setFilterFileType(e.target.value)}
@@ -2248,18 +2253,18 @@ function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="all">All Types</option>
-                      <option value="image">Images (jpg, png, etc.)</option>
-                      <option value="video">Videos (mp4, mkv, etc.)</option>
-                      <option value="audio">Audios (mp3, wav, etc.)</option>
-                      <option value="document">Documents (pdf, docx, txt, etc.)</option>
-                      <option value="other">Others</option>
+                      <option value="all">{t('allTypes')}</option>
+                      <option value="image">{t('images')}</option>
+                      <option value="video">{t('videos')}</option>
+                      <option value="audio">{t('audios')}</option>
+                      <option value="document">{t('documents')}</option>
+                      <option value="other">{t('others')}</option>
                     </select>
                   </div>
 
                   {/* Size Filter */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>FILE SIZE</label>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>{t('fileSizeLabel')}</label>
                     <select
                       value={filterFileSize}
                       onChange={(e) => setFilterFileSize(e.target.value)}
@@ -2277,7 +2282,7 @@ function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="all">Any Size</option>
+                      <option value="all">{t('anySize')}</option>
                       <option value="gt10mb">&gt; 10 MB</option>
                       <option value="gt100mb">&gt; 100 MB</option>
                       <option value="gt1gb">&gt; 1 GB</option>
@@ -2286,7 +2291,7 @@ function App() {
 
                   {/* Date Filter */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>MODIFIED DATE</label>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--md-sys-color-primary)', letterSpacing: '0.5px' }}>{t('modifiedDateLabel')}</label>
                     <select
                       value={filterModDate}
                       onChange={(e) => setFilterModDate(e.target.value)}
@@ -2304,11 +2309,11 @@ function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="all">Any Time</option>
-                      <option value="today">Today (Last 24 hrs)</option>
-                      <option value="yesterday">Yesterday</option>
-                      <option value="week">Last 7 Days</option>
-                      <option value="month">Last 30 Days</option>
+                      <option value="all">{t('anyTime')}</option>
+                      <option value="today">{t('today24h')}</option>
+                      <option value="yesterday">{t('yesterday')}</option>
+                      <option value="week">{t('last7Days')}</option>
+                      <option value="month">{t('last30Days')}</option>
                     </select>
                   </div>
                 </div>
@@ -2414,7 +2419,14 @@ function App() {
                 <div className="dashboard-card">
                   <h3 className="section-title">{t('uploadRouterStatus')}</h3>
                   <p className="dashboard-desc">
-                    {t('uploadsRoutedRule')}: <strong>{settings.upload_strategy?.replace('_', ' ').toUpperCase() || 'ROUND ROBIN'}</strong>. 
+                    {t('uploadsRoutedRule')}: <strong>
+                      {settings.upload_strategy === 'weighted_round_robin' ? t('stratWeightedRoundRobin') :
+                       settings.upload_strategy === 'least_used' ? t('stratLeastUsed') :
+                       settings.upload_strategy === 'max_free' ? t('stratMaxFree') :
+                       settings.upload_strategy === 'custom_order' ? t('stratCustomOrder') :
+                       settings.upload_strategy === 'mirror' ? t('stratMirror') :
+                       t('stratRoundRobin')}
+                    </strong>. 
                   </p>
                   <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--md-sys-color-outline-variant)', backgroundColor: 'var(--md-sys-color-surface)' }}>
                     <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>{t('activeProviders')}:</h4>
@@ -3172,9 +3184,8 @@ function App() {
                 {t('allocation')}
               </button>
               <button
-                className="btn"
+                className={`subtab-btn ${storageTab === 'duplicates' ? 'active' : ''}`}
                 style={{
-                  borderRadius: '100px',
                   padding: '8px 20px',
                   fontSize: '13px',
                   fontWeight: '500',
@@ -3185,7 +3196,7 @@ function App() {
                 }}
                 onClick={() => setStorageTab('duplicates')}
               >
-                Duplicates finder
+                {t('duplicatesTab')}
               </button>
             </div>
             
@@ -3329,11 +3340,12 @@ function App() {
                   {/* Strategies Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', marginBottom: '32px' }}>
                     {[
-                      { val: 'round_robin', label: 'Round Robin', desc: 'Uploads take turns across accounts in order.' },
-                      { val: 'weighted_round_robin', label: 'Weighted Round Robin', desc: 'Larger accounts receive proportionally more uploads.' },
-                      { val: 'least_used', label: 'Least Used', desc: 'Sends each upload to the account with lowest used %.' },
-                      { val: 'max_free', label: 'Most Free Space', desc: 'Sends each upload to the account with most free space.' },
-                      { val: 'custom_order', label: 'Custom Order', desc: 'Fills accounts in the exact order you set below.' }
+                      { val: 'round_robin', label: t('stratRoundRobin'), desc: t('stratRoundRobinDesc') },
+                      { val: 'weighted_round_robin', label: t('stratWeightedRoundRobin'), desc: t('stratWeightedRoundRobinDesc') },
+                      { val: 'least_used', label: t('stratLeastUsed'), desc: t('stratLeastUsedDesc') },
+                      { val: 'max_free', label: t('stratMaxFree'), desc: t('stratMaxFreeDesc') },
+                      { val: 'custom_order', label: t('stratCustomOrder'), desc: t('stratCustomOrderDesc') },
+                      { val: 'mirror', label: t('stratMirror'), desc: t('stratMirrorDesc') }
                     ].map(st => {
                       const isActive = (settings.upload_strategy || 'round_robin') === st.val;
                       return (
@@ -3425,9 +3437,9 @@ function App() {
 
               {storageTab === 'duplicates' && (
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>Duplicate Files Cleanup</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{t('duplicatesHeader')}</h3>
                   <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px' }}>
-                    Find and remove redundant file copies across your connected cloud accounts. Duplicate files are matched by name and exact content size.
+                    {t('duplicatesDesc')}
                   </p>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -3437,7 +3449,7 @@ function App() {
                       disabled={duplicatesLoading}
                       onClick={scanDuplicateFiles}
                     >
-                      {duplicatesLoading ? 'Scanning...' : 'Scan Now'}
+                      {duplicatesLoading ? t('scanning') : t('scanNow')}
                     </button>
 
                     {duplicateFiles.length > 0 && (
@@ -3448,8 +3460,8 @@ function App() {
                         disabled={selectedIDs.length === 0}
                         onClick={() => {
                           showConfirmDialog(
-                            lang === 'id' ? 'Hapus Berkas Duplikat' : 'Delete Duplicate Files',
-                            `Are you sure you want to permanently delete the ${selectedIDs.length} selected duplicate files?`,
+                            t('deleteDuplicateCopy'),
+                            t('confirmDeleteDuplicates').replace('{count}', String(selectedIDs.length)),
                             async () => {
                               let successCount = 0;
                               let failCount = 0;
@@ -3467,18 +3479,18 @@ function App() {
                               }
                               
                               if (successCount > 0) {
-                                showInfoDialog("Deletion Complete", `Successfully deleted ${successCount} duplicate files.${failCount > 0 ? ` (${failCount} failed)` : ''}`, "info");
+                                showInfoDialog(t('deletionComplete'), `${t('duplicateCopyDeleted')} (${successCount})`, "info");
                                 setSelectedIDs([]);
                                 scanDuplicateFiles();
                               } else {
-                                showInfoDialog("Error", "Failed to delete selected duplicate files.");
+                                showInfoDialog(t('error'), t('failedDeleteDuplicates'));
                               }
                             },
-                            { variant: 'danger', confirmLabel: 'Delete', cancelLabel: 'Cancel' }
+                            { variant: 'danger', confirmLabel: t('permanentlyDelete'), cancelLabel: t('cancel') }
                           );
                         }}
                       >
-                        Delete Selected Duplicates ({selectedIDs.length})
+                        {t('deleteSelectedDuplicates').replace('{count}', String(selectedIDs.length))}
                       </button>
                     )}
                   </div>
@@ -3486,13 +3498,13 @@ function App() {
                   {duplicatesLoading ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '60px', gap: '12px' }}>
                       <div className="loading-spinner" style={{ width: '32px', height: '32px', border: '3px solid var(--md-sys-color-surface-variant)', borderTop: '3px solid var(--md-sys-color-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                      <span style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>Analyzing index tables for duplicate hashes...</span>
+                      <span style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)' }}>{t('analyzingHashes')}</span>
                     </div>
                   ) : duplicateFiles.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--md-sys-color-outline-variant)', borderRadius: '16px', color: 'var(--md-sys-color-on-surface-variant)' }}>
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.7, marginBottom: '8px' }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                      <p style={{ fontSize: '14px', fontWeight: '500' }}>No duplicate files found</p>
-                      <p style={{ fontSize: '11px', marginTop: '4px' }}>Click 'Scan Now' to run a synchronization search scan.</p>
+                      <p style={{ fontSize: '14px', fontWeight: '500' }}>{t('noDuplicatesFound')}</p>
+                      <p style={{ fontSize: '11px', marginTop: '4px' }}>{t('noDuplicatesDesc')}</p>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -3542,7 +3554,7 @@ function App() {
                                           </div>
                                         </td>
                                         <td style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', padding: '12px' }}>
-                                          Modified: {formatDateTime(item.modifiedAt)}
+                                          {t('modifiedAt')}: {formatDateTime(item.modifiedAt)}
                                         </td>
                                         <td style={{ width: '50px', padding: '12px', textAlign: 'right' }}>
                                           <button
@@ -3551,18 +3563,18 @@ function App() {
                                             style={{ color: 'var(--md-sys-color-error)', cursor: 'pointer' }}
                                             onClick={() => {
                                               showConfirmDialog(
-                                                lang === 'id' ? 'Hapus Salinan Duplikat' : 'Delete Duplicate Copy',
-                                                `Are you sure you want to permanently delete this copy from ${acc?.displayName || item.provider}?`,
+                                                t('deleteDuplicateCopy'),
+                                                t('confirmDeleteDuplicateCopy').replace('{name}', acc?.displayName || item.provider),
                                                 async () => {
                                                   try {
                                                     await DeleteFile(item.id);
-                                                    showInfoDialog("Deleted", "Duplicate copy deleted successfully.", "info");
+                                                    showInfoDialog(t('deleted'), t('duplicateCopyDeleted'), "info");
                                                     scanDuplicateFiles();
                                                   } catch (e) {
-                                                    showInfoDialog("Error", "Failed to delete: " + e);
+                                                    showInfoDialog(t('error'), "Failed: " + e);
                                                   }
                                                 },
-                                                { variant: 'danger', confirmLabel: 'Delete', cancelLabel: 'Cancel' }
+                                                { variant: 'danger', confirmLabel: t('permanentlyDelete'), cancelLabel: t('cancel') }
                                               );
                                             }}
                                           >
@@ -4126,7 +4138,7 @@ function App() {
             </>
           ) ) : (
             <>
-              <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); setModal({ type: 'create-folder' }); }}>
+              <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openCreateFolderModal(); }}>
                 <IconFolder />
                 <span>{t('newFolder')}</span>
               </div>
@@ -4418,20 +4430,20 @@ function App() {
       {modal?.type === 'transfer-file' && transferFile && (
         <div className="modal-overlay">
           <form className="modal-content" onSubmit={handleTransferSubmit}>
-            <h3 className="modal-header">Copy to another cloud</h3>
+            <h3 className="modal-header">{t('copyToAnotherCloud')}</h3>
             <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px' }}>
-              Select target cloud account and folder directory to copy <strong>{transferFile.name}</strong> directly.
+              {t('copyToCloudDesc') || `Pilih akun cloud dan folder tujuan untuk menyalin ${transferFile.name} secara langsung.`}
             </p>
 
             <div className="form-group">
-              <label className="form-label">Destination Account</label>
+              <label className="form-label">{t('destinationAccount')}</label>
               <select
                 className="form-input"
                 value={selectedDestAccountID}
                 required
                 onChange={(e) => setSelectedDestAccountID(e.target.value)}
               >
-                <option value="" disabled>Select target account...</option>
+                <option value="" disabled>{t('destinationAccount')}...</option>
                 {accounts.filter(a => a.active).map(acc => (
                   <option key={acc.id} value={acc.id}>
                     {acc.displayName} ({acc.provider.toUpperCase()})
@@ -4441,7 +4453,7 @@ function App() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Destination Virtual Folder</label>
+              <label className="form-label">{t('destinationVirtualFolder')}</label>
               <select
                 className="form-input"
                 value={selectedDestFolderID}
@@ -4450,7 +4462,7 @@ function App() {
               >
                 {virtualFolders.map(folder => (
                   <option key={folder.id} value={folder.id}>
-                    {folder.id === 'root' ? '/ (Main Storage root)' : `/${folder.name}`}
+                    {folder.id === 'root' ? `/ (${t('mainStorageRoot')})` : `/${folder.name}`}
                   </option>
                 ))}
               </select>
@@ -4459,7 +4471,7 @@ function App() {
             <div className="modal-footer">
               <button type="button" className="btn btn-text" disabled={transferLoading} onClick={() => { setModal(null); setTransferFile(null); }}>{t('cancel')}</button>
               <button type="submit" className="btn btn-filled" disabled={transferLoading || !selectedDestAccountID}>
-                {transferLoading ? 'Starting...' : 'Copy File'}
+                {transferLoading ? '...' : t('startDirectCopy')}
               </button>
             </div>
           </form>
@@ -4469,13 +4481,13 @@ function App() {
       {modal?.type === 'remote-upload' && (
         <div className="modal-overlay">
           <form className="modal-content" onSubmit={handleRemoteUploadSubmit}>
-            <h3 className="modal-header">Remote URL Upload</h3>
+            <h3 className="modal-header">{t('remoteUrlUpload')}</h3>
             <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px' }}>
-              Download a file directly from a URL to your selected cloud storage folder.
+              {t('remoteUploadDesc') || 'Unduh file secara langsung dari URL publik ke folder penyimpanan cloud Anda.'}
             </p>
 
             <div className="form-group">
-              <label className="form-label">Direct Download URL</label>
+              <label className="form-label">{t('directDownloadUrl')}</label>
               <input
                 type="url"
                 className="form-input"
@@ -4488,14 +4500,14 @@ function App() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Target Cloud Account</label>
+              <label className="form-label">{t('destinationAccount')}</label>
               <select
                 className="form-input"
                 value={remoteUploadAccountID}
                 required
                 onChange={(e) => setRemoteUploadAccountID(e.target.value)}
               >
-                <option value="" disabled>Select target account...</option>
+                <option value="" disabled>{t('destinationAccount')}...</option>
                 {accounts.filter(a => a.active).map(acc => (
                   <option key={acc.id} value={acc.id}>
                     {acc.displayName} ({acc.provider.toUpperCase()})
@@ -4507,7 +4519,7 @@ function App() {
             <div className="modal-footer">
               <button type="button" className="btn btn-text" disabled={transferLoading} onClick={() => { setModal(null); setRemoteUploadURL(''); }}>{t('cancel')}</button>
               <button type="submit" className="btn btn-filled" disabled={transferLoading || !remoteUploadURL.trim() || !remoteUploadAccountID}>
-                {transferLoading ? 'Starting...' : 'Upload URL'}
+                {transferLoading ? '...' : t('startRemoteUpload')}
               </button>
             </div>
           </form>
@@ -4517,13 +4529,13 @@ function App() {
       {modal?.type === 'compress-zip' && (
         <div className="modal-overlay">
           <form className="modal-content" onSubmit={handleCompressFilesSubmit}>
-            <h3 className="modal-header">Compress Selected to ZIP</h3>
+            <h3 className="modal-header">{t('compressToZip')}</h3>
             <p style={{ fontSize: '13px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px' }}>
-              Zip up the {selectedIDs.length} selected files directly in the cloud folder.
+              {t('compressDesc') || `Kompres ${selectedIDs.length} berkas yang dipilih secara langsung di folder cloud.`}
             </p>
 
             <div className="form-group">
-              <label className="form-label">Archive File Name</label>
+              <label className="form-label">{t('archiveFileName')}</label>
               <input
                 type="text"
                 className="form-input"
@@ -4538,7 +4550,7 @@ function App() {
             <div className="modal-footer">
               <button type="button" className="btn btn-text" disabled={transferLoading} onClick={() => { setModal(null); setZipArchiveName(''); setSelectedIDs([]); }}>{t('cancel')}</button>
               <button type="submit" className="btn btn-filled" disabled={transferLoading || !zipArchiveName.trim()}>
-                {transferLoading ? 'Creating ZIP...' : 'Compress'}
+                {transferLoading ? '...' : t('compress')}
               </button>
             </div>
           </form>
@@ -4558,6 +4570,8 @@ function App() {
                 required
                 value={folderNameInput}
                 onChange={(e) => setFolderNameInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                placeholder={t('folderNameLabel') || 'Nama Folder'}
               />
             </div>
             <div className="modal-footer">

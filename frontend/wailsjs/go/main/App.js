@@ -338,6 +338,10 @@ export function UploadFileFromPath(arg1, arg2) {
   return window['go']['main']['App']['UploadFileFromPath'](arg1, arg2);
 }
 
+export function UploadMultipleFilesFromPaths(arg1, arg2) {
+  return window['go']['main']['App']['UploadMultipleFilesFromPaths'](arg1, arg2);
+}
+
 export function VerifyTelegramCode(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyTelegramCode'](arg1, arg2, arg3);
 }
