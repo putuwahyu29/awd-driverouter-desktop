@@ -76,7 +76,7 @@ func (hs *HeadlessServer) Start() error {
 			"app":     "Awd DriveRouter",
 			"mode":    "headless",
 			"time":    time.Now().Unix(),
-			"version": "1.0.0",
+			"version": AppVersion,
 		})
 	})
 

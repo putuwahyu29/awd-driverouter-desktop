@@ -13,7 +13,7 @@ export default function AboutView({ lang }: AboutViewProps) {
   const [updateResult, setUpdateResult] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLicense, setShowLicense] = useState(false);
-  const [appVersion, setAppVersion] = useState('1.1.1');
+  const [appVersion, setAppVersion] = useState('1.2.0');
 
   useEffect(() => {
     GetAppVersion()

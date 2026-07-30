@@ -1,5 +1,29 @@
 [
   {
+    "version": "1.2.0",
+    "date": "2026-07-30",
+    "title": {
+      "id": "Awd DriveRouter v1.2.0 - Provider Telegram, Upload Batch Concurrency & Stabilitas Virtual Drive",
+      "en": "Awd DriveRouter v1.2.0 - Telegram Provider, Concurrent Batch Upload & Virtual Drive Stability"
+    },
+    "changes": {
+      "id": [
+        "Integrasi Provider Cloud Baru: Support Telegram Storage Provider (Bot Token & User Session) untuk direktori virtual dan cloud storage berbasis Telegram.",
+        "Pengunggahan Batch Konkuren: Penanganan pengunggahan file dan folder berukuran besar menggunakan Bounded Worker Pool, antrean otomatis, dan pelacakan progres real-time.",
+        "Peningkatan Stabilitas Virtual Drive: Stabilisasi mounting/unmounting drive virtual, pencegahan duplicate mount secara otomatis, serta auto-migration skema database SQLite.",
+        "Penanganan Auto-Refresh Box OAuth Token: Resolusi otomatis untuk token refresh Box yang kedaluwarsa (invalid_grant) untuk menjaga konektivitas akun background sync secara kontinu.",
+        "Pembaruan Standar Komunitas: Penambahan dokumentasi lisensi resmi (LICENSE MIT) dan panduan kode etik (CODE_OF_CONDUCT.md)."
+      ],
+      "en": [
+        "New Cloud Storage Provider: Added Telegram Storage Provider integration (Bot Token & User Session) for Telegram-backed cloud storage and Virtual Drive capabilities.",
+        "Concurrent Batch Uploads: Accelerated large file and folder uploads using a bounded worker pool, automated task queueing, and real-time upload progress tracking.",
+        "Virtual Drive & Mounting Stability: Enhanced drive mount/unmount safety, automatic duplicate mount prevention, and robust SQLite schema auto-migrations.",
+        "Box OAuth Token Auto-Refresh Handling: Resolved expired Box refresh token errors (invalid_grant) to ensure uninterrupted background account synchronization.",
+        "Community Standards & Documentation: Added official open-source license (LICENSE MIT) and contributor guidelines (CODE_OF_CONDUCT.md)."
+      ]
+    }
+  },
+  {
     "version": "1.1.1",
     "date": "2026-07-29",
     "title": {
