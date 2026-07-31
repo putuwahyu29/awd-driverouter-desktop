@@ -164,7 +164,7 @@ func (sm *SyncManager) SyncAccount(acc db.AccountRecord, p provider.Provider) er
 		existingAccountFiles, err := sm.Database.GetFilesByAccount(acc.ID)
 		if err == nil {
 			for _, f := range existingAccountFiles {
-				if f.ID != "root" && !syncedVirtualIDs[f.ID] {
+				if f.ID != "root" && f.Provider != "virtual" && f.PhysicalID != "" && !syncedVirtualIDs[f.ID] {
 					// Only cleanup if physical ID map belongs solely to this account
 					physMap, _ := router.DeserializePhysicalIDs(f.PhysicalID)
 					if len(physMap) <= 1 {

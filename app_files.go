@@ -178,6 +178,10 @@ func (a *App) GetFiles(parentID string, starred bool, search string) ([]db.FileR
 
 				for _, lf := range localFiles {
 					if !seenLocalIDs[lf.ID] {
+						// Do not auto-delete virtual items (e.g. newly created folders or pending virtual files) that have no physical mapping yet
+						if lf.Provider == "virtual" || lf.PhysicalID == "" {
+							continue
+						}
 						physMap, _ := router.DeserializePhysicalIDs(lf.PhysicalID)
 						if physMap != nil {
 							updated := false

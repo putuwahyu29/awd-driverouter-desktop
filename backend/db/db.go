@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"driverouter/backend/security"
@@ -42,6 +44,29 @@ type AccountRecord struct {
 
 type DB struct {
 	Conn *sql.DB
+	mu   sync.Mutex
+}
+
+// Exec executes a SQL write query with mutex serialization and retry with exponential backoff on SQLITE_BUSY.
+func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var res sql.Result
+	var err error
+	for i := 0; i < 15; i++ {
+		res, err = db.Conn.Exec(query, args...)
+		if err == nil {
+			return res, nil
+		}
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "database is locked") || strings.Contains(errStr, "sqlite_busy") || strings.Contains(errStr, "locked") {
+			time.Sleep(time.Duration(20*(i+1)) * time.Millisecond)
+			continue
+		}
+		return res, err
+	}
+	return res, err
 }
 
 type SyncTask struct {
@@ -109,11 +134,16 @@ func InitDB() (*DB, error) {
 // InitDBFromPath initializes the SQLite database at the given path.
 // This is used by tests to create isolated temporary databases.
 func InitDBFromPath(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=10000")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	conn.SetMaxOpenConns(1) // Prevent concurrent write locks in SQLite
+
+	// Explicitly configure WAL mode and busy timeout pragmas on connection
+	_, _ = conn.Exec("PRAGMA journal_mode = WAL;")
+	_, _ = conn.Exec("PRAGMA busy_timeout = 10000;")
+	_, _ = conn.Exec("PRAGMA synchronous = NORMAL;")
 
 	// Create tables if they don't exist
 	queries := []string{
@@ -207,7 +237,7 @@ func (db *DB) Close() error {
 
 // SaveSetting saves a key-value setting.
 func (db *DB) SaveSetting(key, value string) error {
-	_, err := db.Conn.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value)
+	_, err := db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value)
 	return err
 }
 
@@ -308,7 +338,7 @@ func (db *DB) SaveAccount(a AccountRecord) error {
 		encRefreshToken = a.RefreshToken
 	}
 
-	_, err = db.Conn.Exec(
+	_, err = db.Exec(
 		"INSERT OR REPLACE INTO accounts (id, provider, display_name, email, access_token, refresh_token, token_expiry, used_space, total_space, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		a.ID, a.Provider, a.DisplayName, a.Email, encAccessToken, encRefreshToken, a.TokenExpiry, a.UsedSpace, a.TotalSpace, activeInt,
 	)
@@ -317,11 +347,11 @@ func (db *DB) SaveAccount(a AccountRecord) error {
 
 // DeleteAccount deletes an account and all its files from local index.
 func (db *DB) DeleteAccount(id string) error {
-	_, err := db.Conn.Exec("DELETE FROM accounts WHERE id = ?", id)
+	_, err := db.Exec("DELETE FROM accounts WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
-	_, err = db.Conn.Exec("DELETE FROM files WHERE account_id = ?", id)
+	_, err = db.Exec("DELETE FROM files WHERE account_id = ?", id)
 	return err
 }
 
@@ -339,7 +369,7 @@ func (db *DB) SaveFile(f FileRecord) error {
 	if f.Shared {
 		sharedInt = 1
 	}
-	_, err := db.Conn.Exec(
+	_, err := db.Exec(
 		"INSERT OR REPLACE INTO files (id, name, size, is_folder, parent_id, provider, account_id, physical_id, created_at, modified_at, starred, shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		f.ID, f.Name, f.Size, isFolderInt, f.ParentID, f.Provider, f.AccountID, f.PhysicalID, f.CreatedAt.Format(time.RFC3339), f.ModifiedAt.Format(time.RFC3339), starredInt, sharedInt,
 	)
@@ -574,14 +604,14 @@ func (db *DB) DeleteFile(id string) error {
 	}
 
 	// 2. Soft delete the record itself
-	_, err = db.Conn.Exec("UPDATE files SET deleted = 1 WHERE id = ?", id)
+	_, err = db.Exec("UPDATE files SET deleted = 1 WHERE id = ?", id)
 	return err
 }
 
 // RestoreFile restores a file or folder record locally (deleted = 0), and recursively restores its parents.
 func (db *DB) RestoreFile(id string) error {
 	// 1. Restore this item
-	_, err := db.Conn.Exec("UPDATE files SET deleted = 0 WHERE id = ?", id)
+	_, err := db.Exec("UPDATE files SET deleted = 0 WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
@@ -615,7 +645,7 @@ func (db *DB) PermanentlyDeleteFile(id string) error {
 	}
 
 	// 2. Delete the record physically
-	_, err = db.Conn.Exec("DELETE FROM files WHERE id = ?", id)
+	_, err = db.Exec("DELETE FROM files WHERE id = ?", id)
 	return err
 }
 
@@ -665,7 +695,7 @@ func (db *DB) UpdateStarred(id string, starred bool) error {
 	if starred {
 		val = 1
 	}
-	_, err := db.Conn.Exec("UPDATE files SET starred = ? WHERE id = ?", val, id)
+	_, err := db.Exec("UPDATE files SET starred = ? WHERE id = ?", val, id)
 	return err
 }
 
@@ -714,7 +744,7 @@ func (db *DB) GetRecentFiles(limit int) ([]FileRecord, error) {
 
 // UpdateFileName renames a file record.
 func (db *DB) UpdateFileName(id string, name string) error {
-	_, err := db.Conn.Exec("UPDATE files SET name = ?, modified_at = ? WHERE id = ?", name, time.Now().Format(time.RFC3339), id)
+	_, err := db.Exec("UPDATE files SET name = ?, modified_at = ? WHERE id = ?", name, time.Now().Format(time.RFC3339), id)
 	return err
 }
 
@@ -728,7 +758,7 @@ type ActivityRecord struct {
 }
 
 func (db *DB) LogActivity(fileID, fileName, action, details string) error {
-	_, err := db.Conn.Exec(
+	_, err := db.Exec(
 		"INSERT INTO activities (file_id, file_name, action, details, timestamp) VALUES (?, ?, ?, ?, ?)",
 		fileID, fileName, action, details, time.Now().Format(time.RFC3339),
 	)
@@ -736,7 +766,7 @@ func (db *DB) LogActivity(fileID, fileName, action, details string) error {
 		return err
 	}
 	// Prune activity log to keep only the latest 1000 entries
-	_, _ = db.Conn.Exec("DELETE FROM activities WHERE id NOT IN (SELECT id FROM activities ORDER BY id DESC LIMIT 1000)")
+	_, _ = db.Exec("DELETE FROM activities WHERE id NOT IN (SELECT id FROM activities ORDER BY id DESC LIMIT 1000)")
 	return nil
 }
 
@@ -824,7 +854,7 @@ func (db *DB) AddSyncTask(t SyncTask) error {
 	if t.Enabled {
 		enabledVal = 1
 	}
-	_, err := db.Conn.Exec(
+	_, err := db.Exec(
 		"INSERT INTO sync_tasks (id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		t.ID, t.LocalPath, t.TargetFolderID, t.AccountID, t.SyncMode, enabledVal, t.LastSync,
 	)
@@ -832,7 +862,7 @@ func (db *DB) AddSyncTask(t SyncTask) error {
 }
 
 func (db *DB) DeleteSyncTask(id string) error {
-	_, err := db.Conn.Exec("DELETE FROM sync_tasks WHERE id = ?", id)
+	_, err := db.Exec("DELETE FROM sync_tasks WHERE id = ?", id)
 	return err
 }
 
@@ -841,17 +871,17 @@ func (db *DB) ToggleSyncTask(id string, enabled bool) error {
 	if enabled {
 		enabledVal = 1
 	}
-	_, err := db.Conn.Exec("UPDATE sync_tasks SET enabled = ? WHERE id = ?", enabledVal, id)
+	_, err := db.Exec("UPDATE sync_tasks SET enabled = ? WHERE id = ?", enabledVal, id)
 	return err
 }
 
 func (db *DB) UpdateSyncTaskLastSync(id string, lastSync string) error {
-	_, err := db.Conn.Exec("UPDATE sync_tasks SET last_sync = ? WHERE id = ?", lastSync, id)
+	_, err := db.Exec("UPDATE sync_tasks SET last_sync = ? WHERE id = ?", lastSync, id)
 	return err
 }
 
 func (db *DB) UpdateSyncTask(id string, targetFolderID string, accountID string, syncMode string) error {
-	_, err := db.Conn.Exec(
+	_, err := db.Exec(
 		"UPDATE sync_tasks SET target_folder_id = ?, account_id = ?, sync_mode = ? WHERE id = ?",
 		targetFolderID, accountID, syncMode, id,
 	)

@@ -3184,8 +3184,9 @@ function App() {
                 {t('allocation')}
               </button>
               <button
-                className={`subtab-btn ${storageTab === 'duplicates' ? 'active' : ''}`}
+                className="btn"
                 style={{
+                  borderRadius: '100px',
                   padding: '8px 20px',
                   fontSize: '13px',
                   fontWeight: '500',
@@ -3332,10 +3333,27 @@ function App() {
 
               {storageTab === 'allocation' && (
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{t('allocationRule')}</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '20px' }}>
-                    {t('allocationRuleDesc')}
-                  </p>
+                  {/* Info Banner for Strategy & Folder Upload Explanation */}
+                  <div style={{
+                    padding: '16px 20px',
+                    borderRadius: '16px',
+                    backgroundColor: 'var(--md-sys-color-secondary-container, rgba(0, 100, 200, 0.08))',
+                    border: '1px solid var(--md-sys-color-outline-variant)',
+                    marginBottom: '24px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '14px'
+                  }}>
+                    <span style={{ fontSize: '20px', marginTop: '2px' }}>💡</span>
+                    <div>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px', color: 'var(--md-sys-color-on-secondary-container)' }}>
+                        {t('howStrategyWorksTitle')}
+                      </h4>
+                      <p style={{ fontSize: '12px', lineHeight: '1.5', opacity: 0.9, color: 'var(--md-sys-color-on-secondary-container)' }}>
+                        {t('howStrategyWorksDesc')}
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Strategies Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', marginBottom: '32px' }}>
