@@ -1,5 +1,27 @@
 [
   {
+    "version": "1.2.1",
+    "date": "2026-07-31",
+    "title": {
+      "id": "Awd DriveRouter v1.2.1 - Panduan VFS Strategi Upload & Penyelarasan Database Virtual",
+      "en": "Awd DriveRouter v1.2.1 - VFS Upload Strategy Guide & Virtual DB Sync Optimization"
+    },
+    "changes": {
+      "id": [
+        "Panduan Visual Strategi Upload VFS: Penambahan kartu informasi visual yang menjelaskan mekanisme Virtual File System (VFS) dan pembentukan folder fisik cloud secara dinamis (on-demand).",
+        "Optimasi Penyelarasan Database Virtual: Penyesuaian pembersihan file virtual pada skenario akun terhubung agar mencegah penghapusan file yang belum ter-bind secara fisik.",
+        "Penyempurnaan Antarmuka Manajemen Storage: Perbaikan tampilan tombol navigasi tab alokasi storage dan perataan komponen visual.",
+        "Stabilitas Koneksi Database SQLite: Refactoring pembungkus eksekusi query SQLite backend untuk performa I/O yang lebih stabil saat akses simultan."
+      ],
+      "en": [
+        "VFS Upload Strategy Guide: Added an interactive informational banner explaining the Virtual File System (VFS) allocation mechanism and on-demand cloud folder creation.",
+        "Virtual Database Sync Optimization: Refined account cleanup routines for virtual files to prevent premature file deletion when physical bindings are pending.",
+        "Storage Management UI Enhancements: Improved pill navigation tab styling and visual alignment in the storage allocation settings.",
+        "SQLite Database Connection Stability: Refactored backend query execution wrappers to enhance I/O performance under concurrent operations."
+      ]
+    }
+  },
+  {
     "version": "1.2.0",
     "date": "2026-07-30",
     "title": {
