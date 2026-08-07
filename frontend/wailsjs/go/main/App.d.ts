@@ -6,6 +6,8 @@ import {provider} from '../models';
 
 export function AddB2Account(arg1:string,arg2:string,arg3:string,arg4:string):Promise<db.AccountRecord>;
 
+export function AddCloudSyncTask(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function AddFTPAccount(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string):Promise<db.AccountRecord>;
 
 export function AddFilePermission(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -165,6 +167,8 @@ export function UnmountVirtualDrive(arg1:string):Promise<void>;
 export function UpdateBackupInterval(arg1:number):Promise<void>;
 
 export function UpdateSyncTask(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UpdateSyncTaskExtended(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string,arg8:string):Promise<void>;
 
 export function UpdateWebSharePassword(arg1:string,arg2:string):Promise<void>;
 

@@ -35,6 +35,7 @@ func (a *App) AddSyncTask(localPath, targetFolderID, accountID, syncMode string)
 
 	task := db.SyncTask{
 		ID:             uuid.New().String(),
+		SourceType:     "local",
 		LocalPath:      localPath,
 		TargetFolderID: targetFolderID,
 		AccountID:      accountID,
@@ -53,12 +54,44 @@ func (a *App) AddSyncTask(localPath, targetFolderID, accountID, syncMode string)
 	return nil
 }
 
+func (a *App) AddCloudSyncTask(sourceFolderID, sourceAccountID, targetFolderID, targetAccountID, syncMode string) error {
+	srcFolder, err := a.database.GetFile(sourceFolderID)
+	if err != nil {
+		return fmt.Errorf("folder sumber cloud tidak ditemukan")
+	}
+
+	task := db.SyncTask{
+		ID:              uuid.New().String(),
+		SourceType:      "cloud",
+		SourceFolderID:  sourceFolderID,
+		SourceAccountID: sourceAccountID,
+		LocalPath:       srcFolder.Name,
+		TargetFolderID:  targetFolderID,
+		AccountID:       targetAccountID,
+		SyncMode:        syncMode,
+		Enabled:         true,
+		LastSync:        "",
+	}
+
+	err = a.database.AddSyncTask(task)
+	if err != nil {
+		return err
+	}
+
+	go a.RunSyncTaskNow(task)
+	return nil
+}
+
 func (a *App) RemoveSyncTask(id string) error {
 	return a.database.DeleteSyncTask(id)
 }
 
 func (a *App) UpdateSyncTask(id string, targetFolderID string, accountID string, syncMode string) error {
 	return a.database.UpdateSyncTask(id, targetFolderID, accountID, syncMode)
+}
+
+func (a *App) UpdateSyncTaskExtended(id string, sourceType string, sourceFolderID string, sourceAccountID string, localPath string, targetFolderID string, accountID string, syncMode string) error {
+	return a.database.UpdateSyncTaskExtended(id, sourceType, sourceFolderID, sourceAccountID, localPath, targetFolderID, accountID, syncMode)
 }
 
 func (a *App) ToggleSyncTask(id string, enabled bool) error {
@@ -258,6 +291,35 @@ func (a *App) runSyncTaskOnly(task db.SyncTask) {
 	}()
 
 	log.Printf("Running sync task: %s (%s)", task.LocalPath, task.SyncMode)
+
+	if task.SourceType == "cloud" {
+		srcFolder, err := a.database.GetFile(task.SourceFolderID)
+		if err != nil {
+			log.Printf("Cloud Sync Task source folder not found (%s): %v", task.SourceFolderID, err)
+			_ = a.database.UpdateSyncTaskLastSync(task.ID, time.Now().Format("2006-01-02 15:04:05")+" (Folder sumber tidak ditemukan)")
+			runtime.EventsEmit(a.ctx, "sync_tasks_updated", nil)
+			return
+		}
+		accounts, _ := a.database.GetAccounts()
+		var destAcc db.AccountRecord
+		for _, acc := range accounts {
+			if acc.ID == task.AccountID {
+				destAcc = acc
+				break
+			}
+		}
+		if destAcc.ID == "" || !destAcc.Active {
+			log.Printf("Cloud Sync Task destination account invalid or inactive: %s", task.AccountID)
+			_ = a.database.UpdateSyncTaskLastSync(task.ID, time.Now().Format("2006-01-02 15:04:05")+" (Akun tujuan tidak aktif)")
+			runtime.EventsEmit(a.ctx, "sync_tasks_updated", nil)
+			return
+		}
+
+		a.copyFolderRecursive(srcFolder, destAcc, task.TargetFolderID)
+		_ = a.database.UpdateSyncTaskLastSync(task.ID, time.Now().Format("2006-01-02 15:04:05"))
+		runtime.EventsEmit(a.ctx, "sync_tasks_updated", nil)
+		return
+	}
 
 	// Prevent backup loops on Virtual Drive letter
 	if autoLetter, err := a.database.GetSetting("auto_mount_letter"); err == nil && autoLetter != "" {

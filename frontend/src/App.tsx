@@ -44,7 +44,8 @@ import {
   GetFileActivities,
   GetGeneralActivities,
   CreateWebShare,
-  ToggleAccountActive
+  ToggleAccountActive,
+  AddCloudSyncTask
 } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -240,11 +241,22 @@ function App() {
   // Backup Sync Task States
   const [syncTasks, setSyncTasks] = useState<any[]>([]);
   const [syncTasksLoading, setSyncTasksLoading] = useState<boolean>(false);
+  const [backupSourceType, setBackupSourceType] = useState<'local' | 'cloud'>('local');
+  const [backupSourceFolderID, setBackupSourceFolderID] = useState<string>('root');
+  const [backupSourceAccountID, setBackupSourceAccountID] = useState<string>('');
   const [backupLocalPath, setBackupLocalPath] = useState<string>('');
   const [backupTargetFolderID, setBackupTargetFolderID] = useState<string>('root');
   const [backupAccountID, setBackupAccountID] = useState<string>('auto');
   const [backupSyncMode, setBackupSyncMode] = useState<string>('one-way');
   const [editingSyncTask, setEditingSyncTask] = useState<any | null>(null);
+
+  // Dual Pane View States
+  const [isDualPane, setIsDualPane] = useState<boolean>(false);
+  const [rightParentID, setRightParentID] = useState<string>('root');
+  const [rightBreadcrumbs, setRightBreadcrumbs] = useState<{ id: string; name: string }[]>([{ id: 'root', name: 'Right Drive' }]);
+  const [rightFiles, setRightFiles] = useState<FileRecord[]>([]);
+  const [rightFilterAccountID, setRightFilterAccountID] = useState<string>('all');
+  const [rightLoading, setRightLoading] = useState<boolean>(false);
 
   // Remote URL upload state
   const [remoteUploadURL, setRemoteUploadURL] = useState<string>('');
@@ -372,6 +384,15 @@ function App() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<string>('');
+
+  // Advanced Previewer States
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [rotation, setRotation] = useState<number>(0);
+  const [flipH, setFlipH] = useState<boolean>(false);
+  const [wordWrap, setWordWrap] = useState<boolean>(true);
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+  const [copiedText, setCopiedText] = useState<boolean>(false);
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
   
   // Transfer status drawer
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
@@ -682,6 +703,65 @@ function App() {
     }
   }, [parentID, view, searchKeyword]);
 
+  // Fetch right pane files when dual pane is enabled
+  const fetchRightFiles = (pId: string) => {
+    setRightLoading(true);
+    GetFiles(pId, false, searchKeyword)
+      .then(list => {
+        setRightFiles(list || []);
+      })
+      .catch(e => console.error("fetchRightFiles error:", e))
+      .finally(() => setRightLoading(false));
+  };
+
+  useEffect(() => {
+    if (isDualPane && view === 'explorer') {
+      fetchRightFiles(rightParentID);
+    }
+  }, [rightParentID, isDualPane, view, searchKeyword]);
+
+  const navigateRightToFolder = (id: string, name: string) => {
+    setRightParentID(id);
+    const existingIndex = rightBreadcrumbs.findIndex(b => b.id === id);
+    if (existingIndex !== -1) {
+      setRightBreadcrumbs(rightBreadcrumbs.slice(0, existingIndex + 1));
+    } else {
+      setRightBreadcrumbs([...rightBreadcrumbs, { id, name }]);
+    }
+  };
+
+  const handleDropOnRightPane = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourcePane = e.dataTransfer.getData('sourcePane');
+    const fileId = e.dataTransfer.getData('fileId');
+    if (sourcePane === 'left' && fileId) {
+      const destAcc = rightFilterAccountID === 'all' ? (accounts.find(a => a.active)?.id || '') : rightFilterAccountID;
+      try {
+        await CopyFileToAccount(fileId, destAcc, rightParentID);
+        showToast(lang === 'id' ? 'Transfer ke panel kanan dimulai!' : 'Transfer to right pane started!');
+        setTimeout(() => fetchRightFiles(rightParentID), 1000);
+      } catch (err) {
+        showInfoDialog("Error", "Transfer failed: " + err);
+      }
+    }
+  };
+
+  const handleDropOnLeftPane = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourcePane = e.dataTransfer.getData('sourcePane');
+    const fileId = e.dataTransfer.getData('fileId');
+    if (sourcePane === 'right' && fileId) {
+      const destAcc = filterAccountID === 'all' ? (accounts.find(a => a.active)?.id || '') : filterAccountID;
+      try {
+        await CopyFileToAccount(fileId, destAcc, parentID);
+        showToast(lang === 'id' ? 'Transfer ke panel kiri dimulai!' : 'Transfer to left pane started!');
+        setTimeout(() => fetchFiles(parentID, false), 1000);
+      } catch (err) {
+        showInfoDialog("Error", "Transfer failed: " + err);
+      }
+    }
+  };
+
   // Advanced Search & Filter computation
   const filteredFiles = useMemo(() => {
     return files.filter(f => {
@@ -735,6 +815,15 @@ function App() {
       return true;
     });
   }, [files, filterAccountID, filterFileType, filterFileSize, filterModDate]);
+
+  const rightFilteredFiles = useMemo(() => {
+    return rightFiles.filter(f => {
+      if (rightFilterAccountID !== 'all' && f.accountId !== rightFilterAccountID) {
+        return false;
+      }
+      return true;
+    });
+  }, [rightFiles, rightFilterAccountID]);
 
   // Chronological aggregator for Recent files
   const groupRecentFiles = (recentList: FileRecord[]) => {
@@ -864,26 +953,34 @@ function App() {
 
   const handleAddSyncTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!backupLocalPath) {
+    if (backupSourceType === 'local' && !backupLocalPath) {
       showInfoDialog("Error", "Please select a local folder");
+      return;
+    }
+    if (backupSourceType === 'cloud' && !backupSourceFolderID) {
+      showInfoDialog("Error", "Please select a cloud source folder");
       return;
     }
     try {
       if (editingSyncTask) {
         // @ts-ignore
-        await window.go.main.App.UpdateSyncTask(editingSyncTask.id, backupTargetFolderID, backupAccountID, backupSyncMode);
-        showToast('Backup task updated successfully!');
+        await window.go.main.App.UpdateSyncTaskExtended(editingSyncTask.id, backupSourceType, backupSourceFolderID, backupSourceAccountID, backupLocalPath, backupTargetFolderID, backupAccountID, backupSyncMode);
+        showToast('Sync task updated successfully!');
       } else {
-        // @ts-ignore
-        await window.go.main.App.AddSyncTask(backupLocalPath, backupTargetFolderID, backupAccountID, backupSyncMode);
-        showToast('Backup task added successfully!');
+        if (backupSourceType === 'cloud') {
+          await AddCloudSyncTask(backupSourceFolderID, backupSourceAccountID, backupTargetFolderID, backupAccountID, backupSyncMode);
+        } else {
+          // @ts-ignore
+          await window.go.main.App.AddSyncTask(backupLocalPath, backupTargetFolderID, backupAccountID, backupSyncMode);
+        }
+        showToast('Sync task added successfully!');
       }
       setBackupLocalPath('');
       setEditingSyncTask(null);
       setModal(null);
       fetchSyncTasks();
     } catch (err) {
-      showInfoDialog("Error", "Failed to save backup task: " + err);
+      showInfoDialog("Error", "Failed to save sync task: " + err);
     }
   };
 
@@ -1790,6 +1887,12 @@ function App() {
     setPreviewData(null);
     setPreviewLoading(true);
     setPreviewError('');
+    setZoomLevel(1);
+    setRotation(0);
+    setFlipH(false);
+    setWordWrap(true);
+    setPlaybackRate(1.0);
+    setCopiedText(false);
     try {
       const res = await PreviewFile(file.id);
       if (res && res.success) {
@@ -2341,6 +2444,19 @@ function App() {
           </div>
 
           <div className="toolbar-actions">
+            <button
+              className={`icon-btn ${isDualPane ? 'active' : ''}`}
+              onClick={() => {
+                setIsDualPane(!isDualPane);
+                if (view !== 'explorer') setView('explorer');
+              }}
+              title={isDualPane ? (lang === 'id' ? "Mode Panel Tunggal" : "Single Pane View") : (lang === 'id' ? "Mode Panel Ganda (Dual Pane)" : "Dual Pane View")}
+              style={{ backgroundColor: isDualPane ? 'var(--md-sys-color-primary-container)' : undefined, color: isDualPane ? 'var(--md-sys-color-on-primary-container)' : undefined }}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M3 3h8v18H3V3zm10 0h8v18h-8V3z"/>
+              </svg>
+            </button>
             <button className={`icon-btn ${syncing ? 'spinning' : ''}`} onClick={handleSync} title={t('syncTooltip')}>
               <IconRefresh />
             </button>
@@ -2590,8 +2706,148 @@ function App() {
 
             {/* Content & Details sidebar wrapper */}
             <div className="explorer-content-wrapper">
-              {/* Browser area */}
-              <div className="content-scroll" onContextMenu={handleEmptySpaceContextMenu}>
+              {isDualPane && view === 'explorer' ? (
+                <div style={{ display: 'flex', gap: '16px', flex: 1, width: '100%', minHeight: 0, padding: '16px 24px' }}>
+                  {/* Left Pane */}
+                  <div
+                    style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: '16px', padding: '16px', overflow: 'hidden', backgroundColor: 'var(--md-sys-color-surface-container-low)' }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDropOnLeftPane}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
+                      <div className="breadcrumbs" style={{ fontSize: '13px' }}>
+                        {breadcrumbs.map((crumb, idx) => (
+                          <React.Fragment key={crumb.id}>
+                            {idx > 0 && <span className="breadcrumb-separator"><IconChevronRight /></span>}
+                            <span className={`breadcrumb-item ${idx === breadcrumbs.length - 1 ? 'breadcrumb-active' : ''}`} onClick={() => navigateToFolder(crumb.id, crumb.name)}>
+                              {crumb.name}
+                            </span>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                      <select
+                        className="form-input"
+                        value={filterAccountID}
+                        onChange={(e) => setFilterAccountID(e.target.value)}
+                        style={{ height: '32px', fontSize: '12px', padding: '0 6px', width: '140px' }}
+                      >
+                        <option value="all">{lang === 'id' ? 'Semua Akun' : 'All Accounts'}</option>
+                        {accounts.filter(a => a.active).map(a => (
+                          <option key={a.id} value={a.id}>{a.displayName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="content-scroll" style={{ flex: 1, overflowY: 'auto' }}>
+                      {filteredFiles.map(file => (
+                        <div
+                          key={file.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('sourcePane', 'left');
+                            e.dataTransfer.setData('fileId', file.id);
+                          }}
+                          onDoubleClick={() => file.isFolder ? navigateToFolder(file.id, file.name) : triggerFilePreview(file)}
+                          className="file-row"
+                          style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', cursor: 'grab', marginBottom: '6px', backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}
+                        >
+                          {file.isFolder ? <IconFolder /> : <IconFile />}
+                          <span style={{ flex: 1, fontSize: '13px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>{file.isFolder ? 'Folder' : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transfer Center Actions */}
+                  <div style={{ width: '44px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-filled"
+                      style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      title={lang === 'id' ? 'Salin Kiri ➔ Kanan' : 'Copy Left ➔ Right'}
+                      onClick={async () => {
+                        if (selectedFile) {
+                          const destAcc = rightFilterAccountID === 'all' ? (accounts.find(a => a.active)?.id || '') : rightFilterAccountID;
+                          await CopyFileToAccount(selectedFile.id, destAcc, rightParentID);
+                          showToast(lang === 'id' ? 'Transfer dimulai!' : 'Transfer started!');
+                          setTimeout(() => fetchRightFiles(rightParentID), 1000);
+                        } else {
+                          showInfoDialog("Tip", lang === 'id' ? "Pilih file di panel kiri dulu" : "Select a file in left pane first");
+                        }
+                      }}
+                    >
+                      ➔
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-filled"
+                      style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      title={lang === 'id' ? 'Salin Kanan ➔ Kiri' : 'Copy Right ➔ Left'}
+                      onClick={async () => {
+                        if (rightFilteredFiles.length > 0) {
+                          const destAcc = filterAccountID === 'all' ? (accounts.find(a => a.active)?.id || '') : filterAccountID;
+                          await CopyFileToAccount(rightFilteredFiles[0].id, destAcc, parentID);
+                          showToast(lang === 'id' ? 'Transfer dimulai!' : 'Transfer started!');
+                          setTimeout(() => fetchFiles(parentID, false), 1000);
+                        }
+                      }}
+                    >
+                      ⇦
+                    </button>
+                  </div>
+
+                  {/* Right Pane */}
+                  <div
+                    style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: '16px', padding: '16px', overflow: 'hidden', backgroundColor: 'var(--md-sys-color-surface-container-low)' }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDropOnRightPane}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
+                      <div className="breadcrumbs" style={{ fontSize: '13px' }}>
+                        {rightBreadcrumbs.map((crumb, idx) => (
+                          <React.Fragment key={crumb.id}>
+                            {idx > 0 && <span className="breadcrumb-separator"><IconChevronRight /></span>}
+                            <span className={`breadcrumb-item ${idx === rightBreadcrumbs.length - 1 ? 'breadcrumb-active' : ''}`} onClick={() => navigateRightToFolder(crumb.id, crumb.name)}>
+                              {crumb.name}
+                            </span>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                      <select
+                        className="form-input"
+                        value={rightFilterAccountID}
+                        onChange={(e) => setRightFilterAccountID(e.target.value)}
+                        style={{ height: '32px', fontSize: '12px', padding: '0 6px', width: '140px' }}
+                      >
+                        <option value="all">{lang === 'id' ? 'Semua Akun' : 'All Accounts'}</option>
+                        {accounts.filter(a => a.active).map(a => (
+                          <option key={a.id} value={a.id}>{a.displayName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="content-scroll" style={{ flex: 1, overflowY: 'auto' }}>
+                      {rightFilteredFiles.map(file => (
+                        <div
+                          key={file.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('sourcePane', 'right');
+                            e.dataTransfer.setData('fileId', file.id);
+                          }}
+                          onDoubleClick={() => file.isFolder ? navigateRightToFolder(file.id, file.name) : triggerFilePreview(file)}
+                          className="file-row"
+                          style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', cursor: 'grab', marginBottom: '6px', backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}
+                        >
+                          {file.isFolder ? <IconFolder /> : <IconFile />}
+                          <span style={{ flex: 1, fontSize: '13px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--md-sys-color-on-surface-variant)' }}>{file.isFolder ? 'Folder' : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="content-scroll" onContextMenu={handleEmptySpaceContextMenu}>
               {view === 'recent' && (
                 <div className="recent-filters-bar" style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', padding: '0 4px' }}>
                   <button
@@ -2994,6 +3250,7 @@ function App() {
                 </table>
               )}
             </div>
+          )}
 
             {/* Sidebar file details overlay */}
             {detailsSidebar && selectedFile && (
@@ -4080,6 +4337,10 @@ function App() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                   <span>{t('createWebShare')}</span>
                 </div>
+                <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openTransferModal(contextMenu.file!); }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
+                  <span>{t('copyToAnotherCloud')}</span>
+                </div>
                 {!contextMenu.file.isFolder && (
                 <>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); triggerFilePreview(contextMenu.file!); }}>
@@ -4089,10 +4350,6 @@ function App() {
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); handleDownload(contextMenu.file!); }}>
                     <IconDownload />
                     <span>{t('downloadFile')}</span>
-                  </div>
-                  <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); openTransferModal(contextMenu.file!); }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
-                    <span>{t('copyToAnotherCloud')}</span>
                   </div>
                   <div className="context-item" onClick={() => { setContextMenu(prev => ({ ...prev, visible: false })); if (selectedIDs.length === 0 && contextMenu.file) setSelectedIDs([contextMenu.file.id]); setZipArchiveName('archive.zip'); setModal({ type: 'compress-zip' }); }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 8h-2v2h2v-2zm0-4h-2v2h2v-2zm0-4h-2v2h2V6z"/></svg>
@@ -4171,8 +4428,8 @@ function App() {
 
       {/* File Preview Modal */}
       {previewFile && (
-        <div className="modal-overlay" style={{ backdropFilter: 'blur(16px)', backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 4000 }}>
-          <div className="modal-content" style={{ width: '85vw', maxWidth: '1000px', height: '85vh', display: 'flex', flexDirection: 'column', padding: '24px', borderRadius: '24px', backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-surface-container-high)' }}>
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(20px)', backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 4000 }}>
+          <div className="modal-content preview-modal-content" style={{ width: '85vw', maxWidth: '1050px', height: '85vh', display: 'flex', flexDirection: 'column', padding: '24px', borderRadius: '24px', backgroundColor: 'var(--md-sys-color-surface)' }}>
             
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--md-sys-color-surface-container-high)', paddingBottom: '16px', marginBottom: '16px' }}>
@@ -4202,6 +4459,83 @@ function App() {
               </div>
             </div>
 
+            {/* Sub-Toolbar for Interactive Controls */}
+            {previewData && (
+              <div className="preview-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderRadius: '12px', marginBottom: '16px' }}>
+                {/* Image Tools */}
+                {(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico', '.svg'].includes(previewData.ext)) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setZoomLevel(prev => Math.max(0.2, prev - 0.2))}>- Zoom</button>
+                    <span style={{ fontSize: '12px', fontWeight: '600', minWidth: '45px', textAlign: 'center' }}>{Math.round(zoomLevel * 100)}%</span>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setZoomLevel(prev => Math.min(4, prev + 0.2))}>+ Zoom</button>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => { setZoomLevel(1); setRotation(0); setFlipH(false); }}>Reset</button>
+                    <div style={{ height: '16px', width: '1px', backgroundColor: 'var(--md-sys-color-outline-variant)', margin: '0 4px' }} />
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setRotation(prev => (prev - 90) % 360)}>↺ -90°</button>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setRotation(prev => (prev + 90) % 360)}>↻ +90°</button>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setFlipH(prev => !prev)}>⇄ Flip</button>
+                  </div>
+                )}
+
+                {/* Text & Code Tools */}
+                {previewData.text !== undefined && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span className="provider-badge" style={{ backgroundColor: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)', textTransform: 'uppercase' }}>
+                      {previewData.ext ? previewData.ext.replace('.', '') : 'text'}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                      {previewData.text.split('\n').length} lines ({formatBytes(new Blob([previewData.text]).size)})
+                    </span>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setWordWrap(!wordWrap)}>
+                      {wordWrap ? 'No Wrap' : 'Word Wrap'}
+                    </button>
+                    <button type="button" className="btn btn-text" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => { navigator.clipboard.writeText(previewData.text); setCopiedText(true); setTimeout(() => setCopiedText(false), 2000); }}>
+                      {copiedText ? (lang === 'id' ? '✓ Tersalin' : '✓ Copied') : (lang === 'id' ? 'Salin Teks' : 'Copy Text')}
+                    </button>
+                  </div>
+                )}
+
+                {/* Audio & Video Playback Speed Tools */}
+                {(['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.mp4', '.webm', '.ogv', '.mov', '.mkv'].includes(previewData.ext)) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '500' }}>{lang === 'id' ? 'Kecepatan Playback:' : 'Playback Speed:'}</span>
+                    {[0.5, 1.0, 1.25, 1.5, 2.0].map(rate => (
+                      <button
+                        type="button"
+                        key={rate}
+                        className={`btn ${playbackRate === rate ? 'btn-filled' : 'btn-text'}`}
+                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                        onClick={() => {
+                          setPlaybackRate(rate);
+                          if (mediaRef.current) mediaRef.current.playbackRate = rate;
+                        }}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* PDF Tools */}
+                {previewData.ext === '.pdf' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-text"
+                      style={{ padding: '4px 12px', fontSize: '12px' }}
+                      onClick={() => {
+                        const win = window.open();
+                        if (win) {
+                          win.document.write(`<iframe src="${previewData.base64}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:fixed;" allowfullscreen></iframe>`);
+                        }
+                      }}
+                    >
+                      ↗ {lang === 'id' ? 'Buka di Jendela Baru' : 'Open in New Window'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Content Area */}
             <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
               {previewLoading && (
@@ -4223,29 +4557,53 @@ function App() {
 
               {previewData && (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
-                  {previewData.base64 && (previewData.ext === '.jpg' || previewData.ext === '.jpeg' || previewData.ext === '.png' || previewData.ext === '.gif' || previewData.ext === '.webp' || previewData.ext === '.bmp' || previewData.ext === '.ico' || previewData.ext === '.svg') && (
-                    <img src={previewData.base64} alt={previewFile.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', boxShadow: 'var(--shadow-2)' }} />
+                  {previewData.base64 && (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico', '.svg'].includes(previewData.ext)) && (
+                    <img
+                      src={previewData.base64}
+                      alt={previewFile.name}
+                      style={{
+                        transform: `scale(${zoomLevel}) rotate(${rotation}deg) scaleX(${flipH ? -1 : 1})`,
+                        transition: 'transform 0.2s ease',
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                        objectFit: 'contain',
+                        borderRadius: '8px',
+                        boxShadow: 'var(--shadow-2)'
+                      }}
+                    />
                   )}
                   {previewData.base64 && previewData.ext === '.pdf' && (
                     <embed src={previewData.base64} type="application/pdf" width="100%" height="100%" style={{ borderRadius: '8px', border: 'none' }} />
                   )}
-                  {previewData.base64 && (previewData.ext === '.mp3' || previewData.ext === '.wav' || previewData.ext === '.ogg' || previewData.ext === '.m4a' || previewData.ext === '.flac' || previewData.ext === '.aac') && (
-                    <div style={{ width: '80%', textAlign: 'center' }}>
-                      <audio controls src={previewData.base64} style={{ width: '100%' }}>
+                  {previewData.base64 && (['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'].includes(previewData.ext)) && (
+                    <div style={{ width: '80%', textAlign: 'center', backgroundColor: 'var(--md-sys-color-surface-container-low)', padding: '32px', borderRadius: '16px', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+                      <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                      </div>
+                      <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>{previewFile.name}</h4>
+                      <audio ref={(el) => { mediaRef.current = el; if (el) el.playbackRate = playbackRate; }} controls src={previewData.base64} style={{ width: '100%' }}>
                         Your browser does not support the audio element.
                       </audio>
-                      <p style={{ marginTop: '16px', color: 'var(--md-sys-color-on-surface-variant)' }}>{previewFile.name}</p>
                     </div>
                   )}
-                  {previewData.base64 && (previewData.ext === '.mp4' || previewData.ext === '.webm' || previewData.ext === '.ogv' || previewData.ext === '.mov' || previewData.ext === '.mkv') && (
-                    <video controls src={previewData.base64} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px' }}>
+                  {previewData.base64 && (['.mp4', '.webm', '.ogv', '.mov', '.mkv'].includes(previewData.ext)) && (
+                    <video ref={(el) => { mediaRef.current = el; if (el) el.playbackRate = playbackRate; }} controls src={previewData.base64} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px' }}>
                       Your browser does not support the video element.
                     </video>
                   )}
                   {previewData.text !== undefined && (
-                    <pre style={{ width: '100%', height: '100%', textAlign: 'left', backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', padding: '20px', borderRadius: '12px', overflow: 'auto', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', whiteSpace: 'pre-wrap', border: '1px solid var(--md-sys-color-surface-container-high)' }}>
-                      {previewData.text}
-                    </pre>
+                    <div style={{ width: '100%', height: '100%', display: 'flex', backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--md-sys-color-surface-container-high)' }}>
+                      {/* Line Numbers Gutter */}
+                      <div style={{ padding: '20px 12px', backgroundColor: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface-variant)', fontSize: '12px', fontFamily: 'Consolas, Monaco, monospace', textAlign: 'right', userSelect: 'none', borderRight: '1px solid var(--md-sys-color-outline-variant)', opacity: 0.7 }}>
+                        {previewData.text.split('\n').map((_: string, idx: number) => (
+                          <div key={idx}>{idx + 1}</div>
+                        ))}
+                      </div>
+                      {/* Text Content */}
+                      <pre style={{ flex: 1, margin: 0, padding: '20px', textAlign: 'left', color: 'var(--md-sys-color-on-surface)', overflow: 'auto', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', whiteSpace: wordWrap ? 'pre-wrap' : 'pre', wordBreak: wordWrap ? 'break-all' : 'normal' }}>
+                        {previewData.text}
+                      </pre>
+                    </div>
                   )}
                 </div>
               )}
@@ -5672,30 +6030,89 @@ function App() {
                 : t('addBackupTask')}
             </h3>
 
-            <div className="form-group">
-              <label className="form-label">{t('localFolder')}</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  readOnly
-                  placeholder="No folder selected"
-                  value={backupLocalPath}
-                  style={{ flexGrow: 1 }}
-                />
-                {!editingSyncTask && (
-                  <button
-                    type="button"
-                    className="btn btn-text"
-                    style={{ border: '1px solid var(--md-sys-color-outline-variant)', flexShrink: 0 }}
-                    onClick={handleSelectBackupFolder}
-                  >
-                    {t('selectFolder')}
-                  </button>
-                )}
+            {!editingSyncTask && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  className={`btn ${backupSourceType === 'local' ? 'btn-filled' : 'btn-text'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setBackupSourceType('local')}
+                >
+                  {lang === 'id' ? 'Lokal ➔ Cloud' : 'Local ➔ Cloud'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${backupSourceType === 'cloud' ? 'btn-filled' : 'btn-text'}`}
+                  style={{ flex: 1 }}
+                  onClick={async () => {
+                    setBackupSourceType('cloud');
+                    const folders = await GetVirtualFolders();
+                    setVirtualFolders(folders || []);
+                  }}
+                >
+                  {lang === 'id' ? 'Cloud ➔ Cloud' : 'Cloud ➔ Cloud'}
+                </button>
               </div>
-            </div>
+            )}
+
+            {backupSourceType === 'local' ? (
+              <div className="form-group">
+                <label className="form-label">{t('localFolder')}</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    readOnly
+                    placeholder="No folder selected"
+                    value={backupLocalPath}
+                    style={{ flexGrow: 1 }}
+                  />
+                  {!editingSyncTask && (
+                    <button
+                      type="button"
+                      className="btn btn-text"
+                      style={{ border: '1px solid var(--md-sys-color-outline-variant)', flexShrink: 0 }}
+                      onClick={handleSelectBackupFolder}
+                    >
+                      {t('selectFolder')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label className="form-label">{lang === 'id' ? 'Akun Cloud Sumber' : 'Source Cloud Account'}</label>
+                  <select
+                    className="form-input"
+                    value={backupSourceAccountID}
+                    onChange={(e) => setBackupSourceAccountID(e.target.value)}
+                    style={{ height: '42px', padding: '0 8px' }}
+                  >
+                    <option value="">{lang === 'id' ? 'Semua Akun / Virtual' : 'All Accounts / Virtual'}</option>
+                    {accounts.filter(a => a.active).map(a => (
+                      <option key={a.id} value={a.id}>{a.displayName} ({a.provider})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{lang === 'id' ? 'Folder Sumber Cloud' : 'Source Cloud Folder'}</label>
+                  <select
+                    className="form-input"
+                    value={backupSourceFolderID}
+                    onChange={(e) => setBackupSourceFolderID(e.target.value)}
+                    style={{ height: '42px', padding: '0 8px' }}
+                  >
+                    <option value="root">My Drive (Root)</option>
+                    {virtualFolders.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label className="form-label">{t('destinationAccount')}</label>

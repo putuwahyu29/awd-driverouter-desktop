@@ -1569,5 +1569,62 @@ body {
   animation: progressIndeterminate 1.5s infinite ease-in-out;
 }
 
+/* Glassmorphism Preview Modal & Advanced Controls */
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.preview-modal-content {
+  animation: modalScaleIn 0.25s cubic-bezier(0.2, 0, 0, 1) forwards;
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.5), 0 0 32px rgba(168, 199, 250, 0.08) !important;
+}
+
+.preview-toolbar {
+  backdrop-filter: blur(12px);
+  background: var(--md-sys-color-surface-container) !important;
+  border: 1px solid var(--md-sys-color-outline-variant) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all var(--transition-fast);
+}
+
+.preview-toolbar button {
+  transition: all 0.15s ease !important;
+  border-radius: 8px !important;
+}
+
+.preview-toolbar button:hover {
+  background-color: var(--md-sys-color-surface-container-high) !important;
+  transform: translateY(-1px);
+  color: var(--md-sys-color-primary) !important;
+}
+
+.preview-toolbar button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Dual Pane Drop Zone Hover Highlight */
+.dual-pane-container {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dual-pane-container:hover {
+  border-color: var(--md-sys-color-primary) !important;
+}
+
+.dual-pane-drop-active {
+  border-color: var(--md-sys-color-primary) !important;
+  background-color: var(--md-sys-color-primary-container) !important;
+  box-shadow: 0 0 16px rgba(168, 199, 250, 0.2) !important;
+}
+
 
 

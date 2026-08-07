@@ -804,17 +804,90 @@ func (a *App) resolvePhysicalFolder(virtualFolderID string, account db.AccountRe
 	return physID, nil
 }
 
-// CopyFileToAccount streams a file from its source cloud account directly to the target cloud account.
+// CopyFileToAccount streams a file or folder from its source cloud account directly to the target cloud account.
 func (a *App) CopyFileToAccount(virtualFileID string, destAccountID string, destParentVirtualID string) error {
 	f, err := a.database.GetFile(virtualFileID)
 	if err != nil {
 		return err
 	}
 
-	if f.IsFolder {
-		return fmt.Errorf("directories cannot be copied directly yet")
+	accounts, _ := a.database.GetAccounts()
+	var destAcc db.AccountRecord
+	foundDest := false
+	for _, acc := range accounts {
+		if acc.ID == destAccountID {
+			destAcc = acc
+			foundDest = true
+			break
+		}
 	}
 
+	if !foundDest {
+		return fmt.Errorf("destination account not found")
+	}
+
+	if !destAcc.Active {
+		return fmt.Errorf("destination account is inactive")
+	}
+
+	if f.IsFolder {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("CopyFileToAccount (folder) goroutine panicked: %v", r)
+				}
+			}()
+			a.copyFolderRecursive(f, destAcc, destParentVirtualID)
+		}()
+		return nil
+	}
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("CopyFileToAccount goroutine panicked: %v", r)
+			}
+		}()
+		_ = a.copySingleFileToAccountSync(f, destAcc, destParentVirtualID)
+	}()
+
+	return nil
+}
+
+func (a *App) copyFolderRecursive(srcFolder db.FileRecord, destAcc db.AccountRecord, destParentVirtualID string) {
+	// Create new virtual folder on destination
+	newDestFolderID, err := a.CreateFolder(destParentVirtualID, srcFolder.Name)
+	if err != nil {
+		log.Printf("copyFolderRecursive: failed to create virtual folder '%s': %v", srcFolder.Name, err)
+		return
+	}
+
+	// Resolve physical folder on destination provider
+	_, err = a.resolvePhysicalFolder(newDestFolderID, destAcc)
+	if err != nil {
+		log.Printf("copyFolderRecursive: failed to resolve physical folder '%s': %v", srcFolder.Name, err)
+		return
+	}
+
+	// Get all children of source folder
+	children, err := a.database.GetFiles(srcFolder.ID, false, "")
+	if err != nil {
+		log.Printf("copyFolderRecursive: failed to get children for folder '%s': %v", srcFolder.Name, err)
+		return
+	}
+
+	for _, child := range children {
+		if child.IsFolder {
+			a.copyFolderRecursive(child, destAcc, newDestFolderID)
+		} else {
+			if err := a.copySingleFileToAccountSync(child, destAcc, newDestFolderID); err != nil {
+				log.Printf("copyFolderRecursive: failed to copy file '%s': %v", child.Name, err)
+			}
+		}
+	}
+}
+
+func (a *App) copySingleFileToAccountSync(f db.FileRecord, destAcc db.AccountRecord, destParentVirtualID string) error {
 	physicalMap, err := router.DeserializePhysicalIDs(f.PhysicalID)
 	if err != nil || len(physicalMap) == 0 {
 		return fmt.Errorf("no physical file links found for this record")
@@ -843,108 +916,83 @@ func (a *App) CopyFileToAccount(virtualFileID string, destAccountID string, dest
 		return fmt.Errorf("no active provider account holds a copy of this file")
 	}
 
-	var destAcc db.AccountRecord
-	foundDest := false
-	for _, acc := range accounts {
-		if acc.ID == destAccountID {
-			destAcc = acc
-			foundDest = true
-			break
-		}
+	transferID := fmt.Sprintf("tf-%d", time.Now().UnixNano())
+	runtime.EventsEmit(a.ctx, "transfer_started", map[string]string{
+		"transferId": transferID,
+		"filename":   f.Name,
+	})
+
+	pSrc, err := sync.FetchActiveProviderClient(a.database, srcAcc, nil)
+	if err != nil {
+		a.sendTransferError(transferID, f.Name, err)
+		return err
 	}
 
-	if !foundDest {
-		return fmt.Errorf("destination account not found")
+	reader, err := pSrc.DownloadFile(srcPhysID)
+	if err != nil {
+		a.sendTransferError(transferID, f.Name, err)
+		return err
+	}
+	defer reader.Close()
+
+	destPhysParentID, err := a.resolvePhysicalFolder(destParentVirtualID, destAcc)
+	if err != nil {
+		a.sendTransferError(transferID, f.Name, err)
+		return err
 	}
 
-	if !destAcc.Active {
-		return fmt.Errorf("destination account is inactive")
+	pDest, err := sync.FetchActiveProviderClient(a.database, destAcc, nil)
+	if err != nil {
+		a.sendTransferError(transferID, f.Name, err)
+		return err
 	}
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("CopyFileToAccount goroutine panicked: %v", r)
-			}
-		}()
-		transferID := fmt.Sprintf("tf-%d", time.Now().UnixNano())
-		runtime.EventsEmit(a.ctx, "transfer_started", map[string]string{
-			"transferId": transferID,
-			"filename":   f.Name,
+	var tracker *progressTracker
+	var trackedReader io.Reader = reader
+	if a.uploadHub != nil {
+		tracker = newProgressTracker(a.uploadHub, transferID, f.Name, f.Size, "transfer_progress")
+		trackedReader = tracker.reader(reader)
+	}
+
+	destPhysID, err := pDest.UploadFile(destPhysParentID, f.Name, trackedReader, f.Size)
+	if err != nil {
+		a.sendTransferError(transferID, f.Name, err)
+		return err
+	}
+
+	destPhysicalMap := make(router.PhysicalIDsMap)
+	destPhysicalMap[destAcc.ID] = destPhysID
+	serializedDestPhysIDs, _ := router.SerializePhysicalIDs(destPhysicalMap)
+
+	newFileRecord := db.FileRecord{
+		ID:         uuid.New().String(),
+		Name:       f.Name,
+		Size:       f.Size,
+		IsFolder:   false,
+		ParentID:   destParentVirtualID,
+		Provider:   destAcc.Provider,
+		AccountID:  destAcc.ID,
+		PhysicalID: serializedDestPhysIDs,
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	_ = a.database.SaveFile(newFileRecord)
+	_ = a.database.LogActivity(newFileRecord.ID, newFileRecord.Name, "transfer", fmt.Sprintf("Copied from %s to %s", srcAcc.DisplayName, destAcc.DisplayName))
+
+	if a.uploadHub != nil {
+		a.uploadHub.broadcastProgress(progressMessage{
+			Type:     "transfer_progress",
+			ID:       transferID,
+			Filename: f.Name,
+			Percent:  100,
 		})
+	}
 
-		pSrc, err := sync.FetchActiveProviderClient(a.database, srcAcc, nil)
-		if err != nil {
-			a.sendTransferError(transferID, f.Name, err)
-			return
-		}
-
-		reader, err := pSrc.DownloadFile(srcPhysID)
-		if err != nil {
-			a.sendTransferError(transferID, f.Name, err)
-			return
-		}
-		defer reader.Close()
-
-		destPhysParentID, err := a.resolvePhysicalFolder(destParentVirtualID, destAcc)
-		if err != nil {
-			a.sendTransferError(transferID, f.Name, err)
-			return
-		}
-
-		pDest, err := sync.FetchActiveProviderClient(a.database, destAcc, nil)
-		if err != nil {
-			a.sendTransferError(transferID, f.Name, err)
-			return
-		}
-
-		var tracker *progressTracker
-		var trackedReader io.Reader = reader
-		if a.uploadHub != nil {
-			tracker = newProgressTracker(a.uploadHub, transferID, f.Name, f.Size, "transfer_progress")
-			trackedReader = tracker.reader(reader)
-		}
-
-		destPhysID, err := pDest.UploadFile(destPhysParentID, f.Name, trackedReader, f.Size)
-		if err != nil {
-			a.sendTransferError(transferID, f.Name, err)
-			return
-		}
-
-		destPhysicalMap := make(router.PhysicalIDsMap)
-		destPhysicalMap[destAcc.ID] = destPhysID
-		serializedDestPhysIDs, _ := router.SerializePhysicalIDs(destPhysicalMap)
-
-		newFileRecord := db.FileRecord{
-			ID:         uuid.New().String(),
-			Name:       f.Name,
-			Size:       f.Size,
-			IsFolder:   false,
-			ParentID:   destParentVirtualID,
-			Provider:   destAcc.Provider,
-			AccountID:  destAcc.ID,
-			PhysicalID: serializedDestPhysIDs,
-			CreatedAt:  time.Now(),
-			ModifiedAt: time.Now(),
-		}
-
-		_ = a.database.SaveFile(newFileRecord)
-		_ = a.database.LogActivity(newFileRecord.ID, newFileRecord.Name, "transfer", fmt.Sprintf("Copied from %s to %s", srcAcc.DisplayName, destAcc.DisplayName))
-
-		if a.uploadHub != nil {
-			a.uploadHub.broadcastProgress(progressMessage{
-				Type:     "transfer_progress",
-				ID:       transferID,
-				Filename: f.Name,
-				Percent:  100,
-			})
-		}
-
-		runtime.EventsEmit(a.ctx, "transfer_completed", map[string]string{
-			"transferId": transferID,
-			"filename":   f.Name,
-		})
-	}()
+	runtime.EventsEmit(a.ctx, "transfer_completed", map[string]string{
+		"transferId": transferID,
+		"filename":   f.Name,
+	})
 
 	return nil
 }

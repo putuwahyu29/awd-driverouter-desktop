@@ -6,6 +6,10 @@ export function AddB2Account(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['AddB2Account'](arg1, arg2, arg3, arg4);
 }
 
+export function AddCloudSyncTask(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['AddCloudSyncTask'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function AddFTPAccount(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['AddFTPAccount'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -324,6 +328,10 @@ export function UpdateBackupInterval(arg1) {
 
 export function UpdateSyncTask(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateSyncTask'](arg1, arg2, arg3, arg4);
+}
+
+export function UpdateSyncTaskExtended(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['UpdateSyncTaskExtended'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 export function UpdateWebSharePassword(arg1, arg2) {

@@ -114,6 +114,9 @@ export namespace db {
 	    syncMode: string;
 	    enabled: boolean;
 	    lastSync: string;
+	    sourceType: string;
+	    sourceFolderId: string;
+	    sourceAccountId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SyncTask(source);
@@ -128,6 +131,9 @@ export namespace db {
 	        this.syncMode = source["syncMode"];
 	        this.enabled = source["enabled"];
 	        this.lastSync = source["lastSync"];
+	        this.sourceType = source["sourceType"];
+	        this.sourceFolderId = source["sourceFolderId"];
+	        this.sourceAccountId = source["sourceAccountId"];
 	    }
 	}
 

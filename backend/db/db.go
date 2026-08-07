@@ -70,13 +70,16 @@ func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 type SyncTask struct {
-	ID             string `json:"id"`
-	LocalPath      string `json:"localPath"`
-	TargetFolderID string `json:"targetFolderId"`
-	AccountID      string `json:"accountId"`
-	SyncMode       string `json:"syncMode"`
-	Enabled        bool   `json:"enabled"`
-	LastSync       string `json:"lastSync"`
+	ID              string `json:"id"`
+	LocalPath       string `json:"localPath"`
+	TargetFolderID  string `json:"targetFolderId"`
+	AccountID       string `json:"accountId"`
+	SyncMode        string `json:"syncMode"`
+	Enabled         bool   `json:"enabled"`
+	LastSync        string `json:"lastSync"`
+	SourceType      string `json:"sourceType"`      // "local" or "cloud"
+	SourceFolderID  string `json:"sourceFolderId"`  // if SourceType == "cloud"
+	SourceAccountID string `json:"sourceAccountId"` // if SourceType == "cloud"
 }
 
 // InitDB initializes the SQLite database in the user's config directory.
@@ -205,6 +208,9 @@ func InitDBFromPath(dbPath string) (*DB, error) {
 
 	// Add shared column if it does not exist (for existing DBs)
 	_, _ = conn.Exec("ALTER TABLE files ADD COLUMN shared INTEGER DEFAULT 0")
+	_, _ = conn.Exec("ALTER TABLE sync_tasks ADD COLUMN source_type TEXT DEFAULT 'local'")
+	_, _ = conn.Exec("ALTER TABLE sync_tasks ADD COLUMN source_folder_id TEXT DEFAULT ''")
+	_, _ = conn.Exec("ALTER TABLE sync_tasks ADD COLUMN source_account_id TEXT DEFAULT ''")
 
 	// Create root directory in files table if not exist
 	var exists bool
@@ -811,7 +817,7 @@ func (db *DB) GetGeneralActivities(limit int) ([]ActivityRecord, error) {
 }
 
 func (db *DB) GetSyncTasks() ([]SyncTask, error) {
-	rows, err := db.Conn.Query("SELECT id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync FROM sync_tasks")
+	rows, err := db.Conn.Query("SELECT id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync, COALESCE(source_type, 'local'), COALESCE(source_folder_id, ''), COALESCE(source_account_id, '') FROM sync_tasks")
 	if err != nil {
 		return nil, err
 	}
@@ -822,10 +828,13 @@ func (db *DB) GetSyncTasks() ([]SyncTask, error) {
 		var t SyncTask
 		var enabledVal int
 		var lastSync sql.NullString
-		if err := rows.Scan(&t.ID, &t.LocalPath, &t.TargetFolderID, &t.AccountID, &t.SyncMode, &enabledVal, &lastSync); err == nil {
+		if err := rows.Scan(&t.ID, &t.LocalPath, &t.TargetFolderID, &t.AccountID, &t.SyncMode, &enabledVal, &lastSync, &t.SourceType, &t.SourceFolderID, &t.SourceAccountID); err == nil {
 			t.Enabled = enabledVal == 1
 			if lastSync.Valid {
 				t.LastSync = lastSync.String
+			}
+			if t.SourceType == "" {
+				t.SourceType = "local"
 			}
 			list = append(list, t)
 		}
@@ -837,13 +846,16 @@ func (db *DB) GetSyncTaskByID(id string) (SyncTask, error) {
 	var t SyncTask
 	var enabledVal int
 	var lastSync sql.NullString
-	err := db.Conn.QueryRow("SELECT id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync FROM sync_tasks WHERE id = ?", id).Scan(&t.ID, &t.LocalPath, &t.TargetFolderID, &t.AccountID, &t.SyncMode, &enabledVal, &lastSync)
+	err := db.Conn.QueryRow("SELECT id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync, COALESCE(source_type, 'local'), COALESCE(source_folder_id, ''), COALESCE(source_account_id, '') FROM sync_tasks WHERE id = ?", id).Scan(&t.ID, &t.LocalPath, &t.TargetFolderID, &t.AccountID, &t.SyncMode, &enabledVal, &lastSync, &t.SourceType, &t.SourceFolderID, &t.SourceAccountID)
 	if err != nil {
 		return t, err
 	}
 	t.Enabled = enabledVal == 1
 	if lastSync.Valid {
 		t.LastSync = lastSync.String
+	}
+	if t.SourceType == "" {
+		t.SourceType = "local"
 	}
 	return t, nil
 }
@@ -854,9 +866,12 @@ func (db *DB) AddSyncTask(t SyncTask) error {
 	if t.Enabled {
 		enabledVal = 1
 	}
+	if t.SourceType == "" {
+		t.SourceType = "local"
+	}
 	_, err := db.Exec(
-		"INSERT INTO sync_tasks (id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.LocalPath, t.TargetFolderID, t.AccountID, t.SyncMode, enabledVal, t.LastSync,
+		"INSERT INTO sync_tasks (id, local_path, target_folder_id, account_id, sync_mode, enabled, last_sync, source_type, source_folder_id, source_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.LocalPath, t.TargetFolderID, t.AccountID, t.SyncMode, enabledVal, t.LastSync, t.SourceType, t.SourceFolderID, t.SourceAccountID,
 	)
 	return err
 }
@@ -884,6 +899,14 @@ func (db *DB) UpdateSyncTask(id string, targetFolderID string, accountID string,
 	_, err := db.Exec(
 		"UPDATE sync_tasks SET target_folder_id = ?, account_id = ?, sync_mode = ? WHERE id = ?",
 		targetFolderID, accountID, syncMode, id,
+	)
+	return err
+}
+
+func (db *DB) UpdateSyncTaskExtended(id string, sourceType string, sourceFolderID string, sourceAccountID string, localPath string, targetFolderID string, accountID string, syncMode string) error {
+	_, err := db.Exec(
+		"UPDATE sync_tasks SET source_type = ?, source_folder_id = ?, source_account_id = ?, local_path = ?, target_folder_id = ?, account_id = ?, sync_mode = ? WHERE id = ?",
+		sourceType, sourceFolderID, sourceAccountID, localPath, targetFolderID, accountID, syncMode, id,
 	)
 	return err
 }
